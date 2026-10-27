@@ -9,6 +9,14 @@ und meldet sich dann.
 Der Plan dazu steht in `/mnt/project-files/plan/shopping-list-app-plan.md`, technische
 Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## APK herunterladen
+
+Die neueste fertige APK gibt es hier:
+<https://github.com/Multysquid/project-android1/releases/latest/download/einkaufsliste.apk>
+
+GitHub baut sie bei jeder Änderung neu (`.github/workflows/apk.yml`). Den Link einfach auf
+dem Handy öffnen und weiter bei [Auf das Handy bringen](#auf-das-handy-bringen).
+
 ## Bauen
 
 Voraussetzungen: JDK 17 oder 21 (der Gradle-Wrapper 8.14 läuft nicht mit JDK 25) und das
@@ -34,9 +42,10 @@ ohne Android SDK testen:
 
 ## Auf das Handy bringen
 
-1. `app-debug.apk` aufs Handy kopieren (z. B. per USB-Kabel in den Ordner „Download“) und in
-   „Eigene Dateien“ antippen. Wenn Android nachfragt: „Einstellungen“ → „Aus dieser Quelle
-   zulassen“ einschalten, zurückgehen und „Installieren“ tippen.
+1. Die APK auf dem Handy herunterladen (Link oben) oder eine selbst gebaute APK aufs Handy
+   kopieren (z. B. per USB-Kabel in den Ordner „Download“) und in „Eigene Dateien“
+   antippen. Wenn Android nachfragt: „Einstellungen“ → „Aus dieser Quelle zulassen“
+   einschalten, zurückgehen und „Installieren“ tippen.
 2. Blockiert Samsung die Installation, ist die „Automatische Sperre“ an (ab One UI 6). Dann
    unter *Einstellungen → Sicherheit und Datenschutz → Automatische Sperre* kurz ausschalten,
    die App installieren und die Sperre danach wieder einschalten.
@@ -45,8 +54,9 @@ ohne Android SDK testen:
 4. Optional, für Fotos: unter *Einstellungen → Foto-Erkennung (Gemini)* einen eigenen
    Gemini-API-Schlüssel eintragen (erhältlich in Google AI Studio).
 
-Eine neue Version installierst du genauso über die alte; Liste und Einstellungen bleiben
-erhalten, solange die APK auf demselben Rechner gebaut wurde (gleicher Debug-Schlüssel).
+Die APK ist mit einem Debug-Schlüssel signiert, den jeder Build neu erzeugt. Lässt sich eine
+neue Version deshalb nicht über die alte installieren, vorher in der App „Liste sichern“
+nutzen, die alte App deinstallieren, die neue installieren und die Liste wieder importieren.
 
 ## Welche Daten das Handy verlassen
 

@@ -12,6 +12,17 @@ Developer notes for the Einkaufsliste app. The product plan (German) is in
 
 The wrapper is Gradle 8.14, which does not run on JDK 25 (Gradle 9.1+ does).
 
+CI (`.github/workflows/apk.yml`, GitHub Actions) runs the `core` tests and
+`:app:assembleRelease` on every branch push. Pushes to `main` replace the release `apk`
+with the new `einkaufsliste.apk`, so
+`releases/latest/download/einkaufsliste.apk` is always the newest build. A failed build
+posts the Gradle errors as a separate check run named "Build-Fehler". `versionCode` is the
+Actions run number (1 for local builds).
+
+There is no release key yet: release builds are signed with the debug key of the machine
+that builds them. On CI that key is new for every run, so an update may need an uninstall
+(the user keeps the list with "Liste sichern").
+
 `core` is pure Kotlin/JVM: everything that can be tested without a phone lives
 there. `app` depends on it as `de.jw.einkaufsliste:core` (composite build).
 

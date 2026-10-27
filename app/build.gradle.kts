@@ -15,14 +15,18 @@ android {
         applicationId = "de.jw.einkaufsliste"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes its run number, so every published APK has a higher versionCode.
+        val build = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1
+        versionCode = build
+        versionName = "0.1.$build"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // No release key yet: sign with the debug key so the APK installs directly.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
