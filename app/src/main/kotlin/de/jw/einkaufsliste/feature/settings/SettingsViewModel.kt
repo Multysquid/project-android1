@@ -124,6 +124,17 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         save { it.copy(geminiModel = model) }
     }
 
+    /** Turning it on asks Gemini about the open items right away, so the next check already uses the answers. */
+    fun setClassifyWithGemini(enabled: Boolean) {
+        val saving = save { it.copy(classifyWithGemini = enabled) }
+        if (enabled) {
+            container.appScope.launch {
+                saving.join()
+                container.assortmentService.classifyOpenItems()
+            }
+        }
+    }
+
     /** Brings scheduling in line with changed permissions. */
     fun reschedule() {
         container.appScope.launch { applySchedule() }
@@ -230,6 +241,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val saved = withContext(Dispatchers.Default) { runCatching { apiKeyStore.set(apiKey) }.isSuccess }
             showMessage(if (saved) "Schlüssel gespeichert." else "Der Schlüssel konnte nicht gespeichert werden.")
+            if (saved) container.appScope.launch { container.assortmentService.classifyOpenItems() }
         }
     }
 

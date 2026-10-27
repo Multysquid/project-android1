@@ -1,8 +1,5 @@
 package de.jw.einkaufsliste.core.catalog
 
-import java.text.Normalizer
-import java.util.Locale
-
 /** Guesses a category for a typed German item name ("Vollmilch" -> "milch_eier"). */
 object CategoryGuesser {
     /**
@@ -14,82 +11,31 @@ object CategoryGuesser {
      * Freezer markers ("TK", "tiefgekühlt", "Pizza", "Eis" as a word) decide the
      * category unless the winning keyword contains the marker itself ("Pizzateig").
      */
-    fun guess(name: String): String? {
-        val words = words(name)
+    fun guess(name: String): String? = guessWords(words(name))
+
+    /** [guess] for a name already split into [words]. */
+    internal fun guessWords(words: List<String>): String? {
         if (words.isEmpty()) return null
+        val winner = index.find(words)
         val joined = words.joinToString("")
-
-        var best: Keyword? = null
-        var bestEnd = -1
-        fun offer(keyword: Keyword, end: Int) {
-            val current = best
-            val better = current == null ||
-                keyword.text.length > current.text.length ||
-                (keyword.text.length == current.text.length && end > bestEnd)
-            if (better) {
-                best = keyword
-                bestEnd = end
-            }
-        }
-
-        var offset = 0
-        for (word in words) {
-            offset += word.length
-            wholeWordKeywords[word]?.let { offer(it, offset) }
-        }
-        for (keyword in partKeywords) {
-            val index = joined.lastIndexOf(keyword.text)
-            if (index >= 0) offer(keyword, index + keyword.text.length)
-        }
-
-        val winner = best
         val marker = words.firstOrNull { it in FREEZER_WORDS } ?: FREEZER_PARTS.firstOrNull { it in joined }
         if (marker != null && (winner == null || marker !in winner.text)) return FREEZER_SLUG
-        return winner?.slug
+        return winner?.value
     }
 
     /** Lowercase words without umlauts, accents, digits, units and punctuation ("1,5 l H-Milch" -> [h, milch]). */
-    internal fun words(text: String): List<String> {
-        var s = text.lowercase(Locale.GERMAN)
-            .replace("ä", "ae")
-            .replace("ö", "oe")
-            .replace("ü", "ue")
-            .replace("ß", "ss")
-        s = Normalizer.normalize(s, Normalizer.Form.NFD).replace(combiningMarks, "")
-        s = quantity.replace(s, " ")
-        return nonLetters.split(s).filter { it.isNotEmpty() }
-    }
+    internal fun words(text: String): List<String> = KeywordIndex.words(text)
 
     /** All keywords as (normalized text, slug), for tests. */
-    internal val entries: List<Pair<String, String>> get() = keywords.map { it.text to it.slug }
+    internal val entries: List<Pair<String, String>> get() = index.keywords.map { it.text to it.value }
 
-    private class Keyword(val text: String, val slug: String, val wholeWord: Boolean)
-
-    private const val SHORT_KEYWORD_LENGTH = 3
-    private const val FREEZER_SLUG = "tiefkuehl"
+    /** The category slug of freezer items. */
+    internal const val FREEZER_SLUG = "tiefkuehl"
     private val FREEZER_WORDS = setOf("tk", "eis")
     private val FREEZER_PARTS = listOf("tiefkuehl", "tiefgekuehlt", "tiefgefroren", "gefroren", "frozen", "pizza")
 
-    private val combiningMarks = Regex("\\p{Mn}+")
-    private val nonLetters = Regex("[^a-z]+")
-    private val quantity = Regex(
-        "\\d+(?:[.,]\\d+)?\\s*(?:kg|g|gr|gramm|mg|l|ltr|liter|ml|cl|dl|stk|st|stueck|pck|pkg|pack|packung|packungen|" +
-            "dose|dosen|flasche|flaschen|becher|beutel|er|x|%)?(?![a-z])",
-    )
-
-    private val keywords: List<Keyword> = DICTIONARY.flatMap { (slug, list) ->
-        list.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { raw ->
-            val text = words(raw.removePrefix("=")).joinToString("")
-            if (text.isEmpty()) null
-            else Keyword(text, slug, raw.startsWith("=") || text.length <= SHORT_KEYWORD_LENGTH)
-        }
-    }
-
-    private val wholeWordKeywords: Map<String, Keyword> =
-        keywords.filter { it.wholeWord }.groupBy { it.text }.mapValues { (_, same) -> same.first() }
-
-    private val partKeywords: List<Keyword> =
-        keywords.filter { !it.wholeWord }.distinctBy { it.text }
+    /** The keywords behind [guess], valued by category slug; [AssortmentGuesser] reuses them. */
+    internal val index: KeywordIndex<String> = KeywordIndex(KeywordIndex.parse(DICTIONARY))
 }
 
 /**

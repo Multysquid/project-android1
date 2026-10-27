@@ -1,5 +1,6 @@
 package de.jw.einkaufsliste.core.match
 
+import de.jw.einkaufsliste.core.catalog.Assortment
 import de.jw.einkaufsliste.core.geo.GeoMath
 import de.jw.einkaufsliste.core.model.GeoPoint
 import de.jw.einkaufsliste.core.model.ItemInfo
@@ -28,8 +29,8 @@ class ShopMatcherTest {
         return ShopInfo(id = id, name = name, brand = brand, lat = lat, lon = lon, tag = tag, openingHours = null)
     }
 
-    private fun item(id: Long, name: String, vararg tags: String, pinnedShopId: String? = null) =
-        ItemInfo(id = id, name = name, categorySlug = null, osmTags = tags.toList(), pinnedShopId = pinnedShopId)
+    private fun item(id: Long, name: String, vararg assortments: Assortment) =
+        ItemInfo(id = id, name = name, categorySlug = null, assortments = assortments.toSet())
 
     private fun match(
         shops: List<ShopInfo>,
@@ -41,7 +42,7 @@ class ShopMatcherTest {
     @Test
     fun emptyForNonPositiveRadiusOrNoItems() {
         val shops = listOf(shop("node/1"))
-        val items = listOf(item(1, "Milch", SUPERMARKET))
+        val items = listOf(item(1, "Milch", MILCH_EIER))
         assertTrue(match(shops, items, radius = 0.0).isEmpty())
         assertTrue(match(shops, items, radius = -10.0).isEmpty())
         assertTrue(match(shops, items, radius = Double.NaN).isEmpty())
@@ -50,10 +51,10 @@ class ShopMatcherTest {
     }
 
     @Test
-    fun matchesByCategoryTag() {
+    fun matchesEveryShopWhoseAssortmentHasTheItem() {
         val supermarket = shop("node/1", SUPERMARKET, northMeters = 100.0)
         val bakery = shop("node/2", BAKERY, northMeters = 50.0)
-        val items = listOf(item(1, "Milch", SUPERMARKET, "shop=dairy"), item(2, "Brot", BAKERY, SUPERMARKET))
+        val items = listOf(item(1, "Milch", MILCH_EIER), item(2, "Brot", BROT_BACKWAREN))
 
         val result = match(listOf(supermarket, bakery), items)
 
@@ -67,19 +68,66 @@ class ShopMatcherTest {
     }
 
     @Test
-    fun shopsWithoutMatchingItemsAreDropped() {
+    fun itemMatchesWhenAnyOfItsAssortmentsIsSold() {
         val result = match(
-            listOf(shop("node/1", SUPERMARKET), shop("node/2", "shop=shoes")),
-            listOf(item(1, "Milch", SUPERMARKET)),
+            listOf(shop("node/1", CHEMIST), shop("node/2", SHOES)),
+            listOf(item(1, "Sonnencreme", Assortment.SPORT, Assortment.KOERPERPFLEGE)),
         )
         assertEquals(listOf("node/1"), result.map { it.shop.id })
+    }
+
+    @Test
+    fun shopsWithoutMatchingItemsAreDropped() {
+        val result = match(
+            listOf(shop("node/1", SUPERMARKET), shop("node/2", SHOES), shop("node/3", "shop=hairdresser")),
+            listOf(item(1, "Milch", MILCH_EIER)),
+        )
+        assertEquals(listOf("node/1"), result.map { it.shop.id })
+    }
+
+    @Test
+    fun medicinesOnlyAtPharmacies() {
+        val result = match(
+            listOf(shop("node/1", SUPERMARKET), shop("node/2", CHEMIST), shop("node/3", PHARMACY, northMeters = 300.0)),
+            listOf(item(1, "Ibuprofen", Assortment.MEDIKAMENTE)),
+        )
+        assertEquals(listOf("node/3"), result.map { it.shop.id })
+    }
+
+    @Test
+    fun unclassifiedItemsMatchOnlyBroadShops() {
+        val result = match(
+            listOf(shop("node/1", SUPERMARKET), shop("node/2", DEPARTMENT_STORE, northMeters = 300.0), shop("node/3", SHOES)),
+            listOf(item(1, "Irgendwas")),
+        )
+        assertEquals(listOf("node/2"), result.map { it.shop.id })
+    }
+
+    @Test
+    fun knownChainsGetABonus() {
+        val independent = shop("node/1", SUPERMARKET, northMeters = 50.0, name = "Frischemarkt Yilmaz")
+        val lidl = shop("node/2", SUPERMARKET, northMeters = 300.0, name = "Lidl", brand = "Lidl")
+
+        val result = match(listOf(independent, lidl), listOf(item(1, "Milch", MILCH_EIER)))
+
+        assertEquals(listOf("node/2", "node/1"), result.map { it.shop.id })
+        assertEquals(1.0 + ShopMatcher.CHAIN_BONUS, result[0].score, 1e-9)
+        assertEquals(1.0, result[1].score, 1e-9)
+    }
+
+    @Test
+    fun chainAssortmentWinsOverShopType() {
+        // A chain's own assortment counts, not just the generic one of its OSM tag.
+        val dm = shop("node/1", CHEMIST, name = "dm-drogerie markt", brand = "dm")
+        val result = match(listOf(dm), listOf(item(1, "Shampoo", Assortment.KOERPERPFLEGE), item(2, "Bohrmaschine", Assortment.WERKZEUG)))
+        assertEquals(listOf("Shampoo"), result.single().items.map { it.name })
     }
 
     @Test
     fun radiusEdgeIsInclusive() {
         val shop = shop("node/1", northMeters = 500.0)
         val distance = GeoMath.distanceMeters(here, shop.point)
-        val items = listOf(item(1, "Milch", SUPERMARKET))
+        val items = listOf(item(1, "Milch", MILCH_EIER))
 
         assertEquals(1, match(listOf(shop), items, radius = distance).size)
         assertTrue(match(listOf(shop), items, radius = distance - 0.01).isEmpty())
@@ -89,18 +137,18 @@ class ShopMatcherTest {
     fun shopsOutsideRadiusAreIgnored() {
         val near = shop("node/1", northMeters = 400.0)
         val far = shop("node/2", northMeters = 600.0)
-        val result = match(listOf(near, far), listOf(item(1, "Milch", SUPERMARKET)))
+        val result = match(listOf(near, far), listOf(item(1, "Milch", MILCH_EIER)))
         assertEquals(listOf("node/1"), result.map { it.shop.id })
     }
 
     @Test
     fun matchesByPurchaseHistory() {
-        val chemist = shop("node/7", CHEMIST)
-        val other = shop("node/8", CHEMIST, northMeters = 200.0)
-        val items = listOf(item(1, "  Spezial  Tee ", SUPERMARKET))
+        val shoes = shop("node/7", SHOES)
+        val other = shop("node/8", SHOES, northMeters = 200.0)
+        val items = listOf(item(1, "  Spezial  Tee ", Assortment.KAFFEE_TEE))
         val purchases = listOf(PurchaseInfo(itemName = "spezial tee", shopId = "node/7", at = 1L))
 
-        val result = match(listOf(chemist, other), items, purchases)
+        val result = match(listOf(shoes, other), items, purchases)
 
         assertEquals(listOf("node/7"), result.map { it.shop.id })
         assertEquals(setOf(1L), result[0].learnedItemIds)
@@ -108,10 +156,10 @@ class ShopMatcherTest {
     }
 
     @Test
-    fun learnedIsRecordedAlsoWhenTagMatches() {
+    fun learnedIsRecordedAlsoWhenAssortmentMatches() {
         val result = match(
             listOf(shop("node/1", SUPERMARKET)),
-            listOf(item(1, "Milch", SUPERMARKET), item(2, "Butter", SUPERMARKET)),
+            listOf(item(1, "Milch", MILCH_EIER), item(2, "Butter", MILCH_EIER)),
             listOf(PurchaseInfo("milch", "node/1", 1L), PurchaseInfo("milch", "node/1", 2L)),
         )
         assertEquals(1, result.size)
@@ -122,41 +170,9 @@ class ShopMatcherTest {
     @Test
     fun purchasesOfOtherItemsDoNotMatch() {
         val result = match(
-            listOf(shop("node/1", CHEMIST)),
-            listOf(item(1, "Milch", SUPERMARKET)),
+            listOf(shop("node/1", SHOES)),
+            listOf(item(1, "Milch", MILCH_EIER)),
             listOf(PurchaseInfo("butter", "node/1", 1L)),
-        )
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun pinnedItemMatchesOnlyItsShop() {
-        val pinnedShop = shop("node/1", BAKERY, northMeters = 300.0)
-        val otherSupermarket = shop("node/2", SUPERMARKET, northMeters = 50.0)
-        val items = listOf(item(1, "Milch", SUPERMARKET, pinnedShopId = "node/1"))
-
-        val result = match(listOf(pinnedShop, otherSupermarket), items)
-
-        assertEquals(listOf("node/1"), result.map { it.shop.id })
-        assertEquals(listOf(1L), result[0].items.map { it.id })
-        assertEquals(1.0 + ShopMatcher.PINNED_BONUS, result[0].score, 1e-9)
-    }
-
-    @Test
-    fun pinnedItemIgnoresPurchaseHistoryAtOtherShops() {
-        val result = match(
-            listOf(shop("node/1", SUPERMARKET), shop("node/2", SUPERMARKET)),
-            listOf(item(1, "Milch", SUPERMARKET, pinnedShopId = "node/1")),
-            listOf(PurchaseInfo("milch", "node/2", 1L)),
-        )
-        assertEquals(listOf("node/1"), result.map { it.shop.id })
-    }
-
-    @Test
-    fun pinnedShopOutsideRadiusMatchesNothing() {
-        val result = match(
-            listOf(shop("node/1", SUPERMARKET, northMeters = 900.0), shop("node/2", SUPERMARKET)),
-            listOf(item(1, "Milch", SUPERMARKET, pinnedShopId = "node/1")),
         )
         assertTrue(result.isEmpty())
     }
@@ -164,11 +180,11 @@ class ShopMatcherTest {
     @Test
     fun itemsAreSortedByGermanNameIgnoringCase() {
         val items = listOf(
-            item(1, "zucker", SUPERMARKET),
-            item(2, "Brot", SUPERMARKET),
-            item(3, "Äpfel", SUPERMARKET),
-            item(4, "banane", SUPERMARKET),
-            item(5, "Apfelsaft", SUPERMARKET),
+            item(1, "zucker", Assortment.VORRAT),
+            item(2, "Brot", BROT_BACKWAREN),
+            item(3, "Äpfel", Assortment.OBST_GEMUESE),
+            item(4, "banane", Assortment.OBST_GEMUESE),
+            item(5, "Apfelsaft", Assortment.GETRAENKE),
         )
         val result = match(listOf(shop("node/1")), items)
         assertEquals(listOf("Äpfel", "Apfelsaft", "banane", "Brot", "zucker"), result.single().items.map { it.name })
@@ -182,7 +198,7 @@ class ShopMatcherTest {
             shop("node/3", BAKERY, northMeters = 100.0),
             shop("node/2", BAKERY, northMeters = 50.0),
         )
-        val items = listOf(item(1, "Brot", BAKERY, SUPERMARKET), item(2, "Milch", SUPERMARKET))
+        val items = listOf(item(1, "Brot", BROT_BACKWAREN), item(2, "Milch", MILCH_EIER))
 
         val result = match(shops, items)
 
@@ -191,43 +207,39 @@ class ShopMatcherTest {
     }
 
     @Test
-    fun learnedAndPinnedBonusesAffectRanking() {
+    fun learnedBonusAffectsRanking() {
         val shops = listOf(
             shop("node/1", SUPERMARKET, northMeters = 10.0),
             shop("node/2", CHEMIST, northMeters = 300.0),
-            shop("node/3", "shop=kiosk", northMeters = 400.0),
         )
-        val items = listOf(
-            item(1, "Milch", SUPERMARKET),
-            item(2, "Seife", CHEMIST),
-            item(3, "Zeitung", "shop=kiosk", pinnedShopId = "node/3"),
-        )
+        val items = listOf(item(1, "Milch", MILCH_EIER), item(2, "Seife", Assortment.KOERPERPFLEGE))
         val purchases = listOf(PurchaseInfo("seife", "node/2", 1L))
 
         val result = match(shops, items, purchases)
 
-        assertEquals(listOf("node/3", "node/2", "node/1"), result.map { it.shop.id })
-        assertEquals(listOf(2.0, 1.5, 1.0), result.map { it.score })
+        // The supermarket has both (2.0); the drugstore only the soap, but it was bought there (1.5).
+        assertEquals(listOf("node/1", "node/2"), result.map { it.shop.id })
+        assertEquals(listOf(2.0, 1.5), result.map { it.score })
     }
 
     @Test
     fun nodeAndBuildingOfSameShopAreMergedKeepingBetterScore() {
         val node = shop("node/1", SUPERMARKET, northMeters = 100.0, name = "REWE")
         val way = shop("way/2", SUPERMARKET, northMeters = 140.0, name = "Rewe ")
-        val items = listOf(item(1, "Milch", SUPERMARKET), item(2, "Brot", BAKERY))
+        val items = listOf(item(1, "Milch", MILCH_EIER), item(2, "Brot", BROT_BACKWAREN))
         val purchases = listOf(PurchaseInfo("brot", "way/2", 1L))
 
         val result = match(listOf(node, way), items, purchases)
 
         assertEquals(listOf("way/2"), result.map { it.shop.id })
-        assertEquals(2.5, result.single().score, 1e-9)
+        assertEquals(2.5 + ShopMatcher.CHAIN_BONUS, result.single().score, 1e-9)
     }
 
     @Test
     fun duplicatesWithEqualScoreKeepNearer() {
         val node = shop("node/9", SUPERMARKET, northMeters = 130.0, name = "Edeka")
         val way = shop("way/1", SUPERMARKET, northMeters = 90.0, name = "Edeka")
-        val result = match(listOf(node, way), listOf(item(1, "Milch", SUPERMARKET)))
+        val result = match(listOf(node, way), listOf(item(1, "Milch", MILCH_EIER)))
         assertEquals(listOf("way/1"), result.map { it.shop.id })
     }
 
@@ -235,13 +247,13 @@ class ShopMatcherTest {
     fun brandCountsAsNameForMerging() {
         val node = shop("node/1", CHEMIST, northMeters = 100.0, name = "dm-drogerie markt", brand = "dm")
         val way = shop("way/2", CHEMIST, northMeters = 110.0, name = null, brand = "DM-Drogerie Markt")
-        val result = match(listOf(node, way), listOf(item(1, "Seife", CHEMIST)))
+        val result = match(listOf(node, way), listOf(item(1, "Seife", Assortment.KOERPERPFLEGE)))
         assertEquals(1, result.size)
     }
 
     @Test
     fun differentTagOrFarApartAreNotMerged() {
-        val items = listOf(item(1, "Milch", SUPERMARKET, "shop=convenience"))
+        val items = listOf(item(1, "Milch", MILCH_EIER))
         val sameNameOtherTag = match(
             listOf(
                 shop("node/1", SUPERMARKET, northMeters = 100.0, name = "Netto"),
@@ -268,7 +280,7 @@ class ShopMatcherTest {
                 shop("node/1", SUPERMARKET, northMeters = 100.0, name = "Aldi"),
                 shop("node/2", SUPERMARKET, northMeters = 105.0, name = "Lidl"),
             ),
-            listOf(item(1, "Milch", SUPERMARKET)),
+            listOf(item(1, "Milch", MILCH_EIER)),
         )
         assertEquals(2, result.size)
     }
@@ -281,7 +293,7 @@ class ShopMatcherTest {
                 shop("way/2", SUPERMARKET, northMeters = 101.0),
                 shop("way/3", SUPERMARKET, northMeters = 102.0, name = " ", brand = ""),
             ),
-            listOf(item(1, "Milch", SUPERMARKET)),
+            listOf(item(1, "Milch", MILCH_EIER)),
         )
         assertEquals(listOf("node/1", "way/2", "way/3"), result.map { it.shop.id })
     }
@@ -289,13 +301,7 @@ class ShopMatcherTest {
     @Test
     fun duplicateShopIdsAreCountedOnce() {
         val shop = shop("node/1", SUPERMARKET)
-        val result = match(listOf(shop, shop), listOf(item(1, "Milch", SUPERMARKET)))
-        assertEquals(1, result.size)
-    }
-
-    @Test
-    fun tagsAreComparedTrimmed() {
-        val result = match(listOf(shop("node/1", SUPERMARKET)), listOf(item(1, "Milch", " $SUPERMARKET ")))
+        val result = match(listOf(shop, shop), listOf(item(1, "Milch", MILCH_EIER)))
         assertEquals(1, result.size)
     }
 
@@ -303,5 +309,10 @@ class ShopMatcherTest {
         const val SUPERMARKET = "shop=supermarket"
         const val BAKERY = "shop=bakery"
         const val CHEMIST = "shop=chemist"
+        const val SHOES = "shop=shoes"
+        const val PHARMACY = "amenity=pharmacy"
+        const val DEPARTMENT_STORE = "shop=department_store"
+        val MILCH_EIER = Assortment.MILCH_EIER
+        val BROT_BACKWAREN = Assortment.BROT_BACKWAREN
     }
 }

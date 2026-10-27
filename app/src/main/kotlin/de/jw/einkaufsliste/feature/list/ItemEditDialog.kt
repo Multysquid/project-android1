@@ -6,22 +6,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,31 +37,28 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.jw.einkaufsliste.core.catalog.Assortment
 import de.jw.einkaufsliste.core.catalog.CategoryCatalog
-import de.jw.einkaufsliste.core.model.GeoPoint
+import de.jw.einkaufsliste.core.catalog.StoreCatalog
 import de.jw.einkaufsliste.data.db.CategoryEntity
 import de.jw.einkaufsliste.data.db.ItemEntity
-import de.jw.einkaufsliste.data.db.ShopEntity
+import de.jw.einkaufsliste.data.repo.AssortmentService
 import de.jw.einkaufsliste.ui.common.CategoryPicker
 import kotlinx.coroutines.flow.first
 
 /**
  * Add ([item] == null) or edit dialog for an item. When adding, the name field gets
  * the focus and the category follows the typed name (see [CategorySuggestion]) until
- * the user picks one. Editing also offers "Nur in diesem Laden" and deleting.
+ * the user picks one. Below, the dialog says in which shops the app will look for the
+ * item ([assortmentAnswers] are Gemini's answers by name). Editing also offers deleting.
  */
 @Composable
 internal fun ItemEditDialog(
     item: ItemEntity?,
     categories: List<CategoryEntity>,
     existingItems: List<ItemEntity>,
-    shops: Map<String, ShopEntity>,
-    here: GeoPoint?,
-    shopLoad: ShopLoadState,
-    onRequestLocation: () -> Unit,
-    onLoadShops: () -> Unit,
+    assortmentAnswers: Map<String, Set<Assortment>>,
     onDismiss: () -> Unit,
     onSave: (ItemDraft) -> Unit,
     onDelete: () -> Unit,
@@ -85,8 +76,6 @@ internal fun ItemEditDialog(
             item?.let { it.categoryId ?: categories.firstOrNull { c -> c.slug == CategoryCatalog.FALLBACK_SLUG }?.id },
         )
     }
-    var pinnedShopId by rememberSaveable { mutableStateOf(item?.pinnedShopId) }
-    var showShopPicker by rememberSaveable { mutableStateOf(false) }
 
     val suggestedCategoryId = remember(name.text, categories, existingItems) {
         CategorySuggestion.suggest(name.text, categories, existingItems)
@@ -102,7 +91,6 @@ internal fun ItemEditDialog(
                     quantity = quantity.trim().ifEmpty { null },
                     note = note.trim().ifEmpty { null },
                     categoryId = categoryId,
-                    pinnedShopId = pinnedShopId,
                 ),
             )
         }
@@ -175,15 +163,13 @@ internal fun ItemEditDialog(
                     onSelect = { chosenCategoryId = it },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!isNew) {
+                if (name.text.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
-                    PinnedShopField(
-                        shopName = pinnedShopId?.let { id -> shops[id]?.displayNameWithType() ?: MISSING_SHOP_LABEL },
-                        onPick = {
-                            onRequestLocation()
-                            showShopPicker = true
+                    val categorySlug = categories.firstOrNull { it.id == categoryId }?.slug
+                    SearchedInField(
+                        assortments = remember(name.text, categorySlug, assortmentAnswers) {
+                            AssortmentService.resolve(name.text, categorySlug, assortmentAnswers)
                         },
-                        onClear = { pinnedShopId = null },
                     )
                 }
             }
@@ -197,56 +183,27 @@ internal fun ItemEditDialog(
             TextButton(onClick = onDismiss) { Text("Abbrechen") }
         },
     )
-
-    if (showShopPicker) {
-        ShopPickerDialog(
-            shops = shops.values,
-            selectedId = pinnedShopId,
-            here = here,
-            loadState = shopLoad,
-            onLoadShops = onLoadShops,
-            onSelect = {
-                pinnedShopId = it.id
-                showShopPicker = false
-            },
-            onDismiss = { showShopPicker = false },
-        )
-    }
 }
 
+/** "Wird automatisch gesucht": what kind of product the item is and example shops that sell it. */
 @Composable
-private fun PinnedShopField(shopName: String?, onPick: () -> Unit, onClear: () -> Unit) {
-    Column {
-        Text("Nur in diesem Laden", style = MaterialTheme.typography.labelLarge)
-        Text(
-            text = if (shopName == null) {
-                "Die App meldet den Artikel bei jedem passenden Laden."
-            } else {
-                "Die App meldet den Artikel nur bei diesem Laden."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        if (shopName == null) {
-            OutlinedButton(onClick = onPick, contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                Icon(Icons.Outlined.Storefront, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text("Laden auswählen")
-            }
+private fun SearchedInField(assortments: Set<Assortment>) {
+    val text = if (assortments.isEmpty()) {
+        val broad = StoreCatalog.exampleChains(emptySet(), limit = 3)
+        "Die Art des Artikels ist unbekannt. Die App sucht ihn in Läden mit großem Sortiment" +
+            if (broad.isEmpty()) "." else ", z. B. bei ${broad.joinToString(", ")}."
+    } else {
+        val kinds = assortments.joinToString(", ") { it.label }
+        val chains = StoreCatalog.exampleChains(assortments)
+        val examples = if (chains.isNotEmpty()) {
+            "z. B. bei ${chains.joinToString(", ")}"
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "📍 $shopName",
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onPick) { Text("Ändern") }
-                IconButton(onClick = onClear) {
-                    Icon(Icons.Outlined.Close, contentDescription = "Laden entfernen")
-                }
-            }
+            "z. B. ${StoreCatalog.shopTypeLabels(assortments).joinToString(", ")}"
         }
+        "$kinds: in allen passenden Läden im Umkreis, $examples."
+    }
+    Column {
+        Text("Wird automatisch gesucht", style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

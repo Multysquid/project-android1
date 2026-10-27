@@ -3,7 +3,6 @@ package de.jw.einkaufsliste.feature.list
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,14 +79,13 @@ internal fun SectionHeader(
 }
 
 /**
- * One item: checkbox, name, quantity/note and pinned shop. Swiping either way
+ * One item: checkbox, name and quantity/note. Swiping either way
  * deletes it ([onDelete] is called once).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ItemRow(
     item: ItemEntity,
-    pinnedShopName: String?,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
@@ -129,21 +127,19 @@ internal fun ItemRow(
             }
         },
     ) {
-        ItemRowContent(item, pinnedShopName, onCheckedChange, onClick)
+        ItemRowContent(item, onCheckedChange, onClick)
     }
 }
 
 @Composable
 private fun ItemRowContent(
     item: ItemEntity,
-    pinnedShopName: String?,
     onCheckedChange: (Boolean) -> Unit,
     onClick: () -> Unit,
 ) {
     val textAlpha = if (item.done) 0.55f else 1f
     val decoration = if (item.done) TextDecoration.LineThrough else null
     val details = listOfNotNull(item.quantity, item.note).joinToString(" · ")
-    val hasSupporting = details.isNotEmpty() || pinnedShopName != null
 
     ListItem(
         modifier = Modifier.clickable(onClickLabel = "Bearbeiten", onClick = onClick),
@@ -159,22 +155,15 @@ private fun ItemRowContent(
                 modifier = Modifier.alpha(textAlpha),
             )
         },
-        supportingContent = if (hasSupporting) {
+        supportingContent = if (details.isNotEmpty()) {
             {
-                Column(Modifier.alpha(textAlpha)) {
-                    if (details.isNotEmpty()) {
-                        Text(text = details, textDecoration = decoration, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (pinnedShopName != null) {
-                        Text(
-                            text = "📍 $pinnedShopName",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+                Text(
+                    text = details,
+                    textDecoration = decoration,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.alpha(textAlpha),
+                )
             }
         } else {
             null

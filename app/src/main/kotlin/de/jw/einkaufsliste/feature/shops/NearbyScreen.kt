@@ -272,7 +272,7 @@ private fun NearbyContent(
     }
 }
 
-/** With an empty list: whether the shops around are loaded, so an item can be pinned to one of them. */
+/** With an empty list: whether the shops around are loaded, so new items can be looked for right away. */
 @Composable
 private fun EmptyListShops(state: NearbyUiState, onRetry: () -> Unit) {
     val context = LocalContext.current
@@ -299,7 +299,7 @@ private fun EmptyListShops(state: NearbyUiState, onRetry: () -> Unit) {
         shopCount == 0 -> StatusText("Keine Läden im Umkreis von $radius gefunden.")
         shopCount != null -> StatusText(
             "${if (shopCount == 1) "1 Laden" else "$shopCount Läden"} im Umkreis von $radius geladen. " +
-                "Beim Bearbeiten eines Artikels kannst du ihn unter „Nur in diesem Laden“ einem Laden zuordnen.",
+                "Setz etwas auf deine Liste, dann sucht die App es automatisch in allen passenden Läden.",
         )
     }
 }

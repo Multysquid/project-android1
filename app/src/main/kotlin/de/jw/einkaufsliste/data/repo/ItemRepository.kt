@@ -22,11 +22,15 @@ data class ListSection(
  * Shopping list items.
  *
  * [onItemBought] is called after an item was ticked off; the app uses it to record
- * where it was bought (see PurchaseRecorder). It must return quickly.
+ * where it was bought (see PurchaseRecorder). [onItemNamed] is called after an item was
+ * added or edited; the app uses it to classify the name (see AssortmentService). Both
+ * must return quickly.
  */
 class ItemRepository(
     db: AppDatabase,
+    private val assortments: AssortmentService,
     private val onItemBought: (ItemEntity) -> Unit,
+    private val onItemNamed: (String) -> Unit,
 ) {
     private val itemDao = db.itemDao()
     private val categoryDao = db.categoryDao()
@@ -54,18 +58,25 @@ class ItemRepository(
         note: String? = null,
         barcode: String? = null,
         source: ItemSource = ItemSource.MANUAL,
-    ): Long = itemDao.insert(
-        ItemEntity(
-            name = name.trim(),
-            categoryId = categoryId,
-            quantity = quantity?.trim()?.ifEmpty { null },
-            note = note?.trim()?.ifEmpty { null },
-            barcode = barcode,
-            source = source,
-        ),
-    )
+    ): Long {
+        val id = itemDao.insert(
+            ItemEntity(
+                name = name.trim(),
+                categoryId = categoryId,
+                quantity = quantity?.trim()?.ifEmpty { null },
+                note = note?.trim()?.ifEmpty { null },
+                barcode = barcode,
+                source = source,
+            ),
+        )
+        onItemNamed(name.trim())
+        return id
+    }
 
-    suspend fun update(item: ItemEntity) = itemDao.update(item.copy(name = item.name.trim()))
+    suspend fun update(item: ItemEntity) {
+        itemDao.update(item.copy(name = item.name.trim()))
+        onItemNamed(item.name.trim())
+    }
 
     suspend fun setDone(id: Long, done: Boolean) {
         val item = itemDao.getById(id) ?: return
@@ -78,7 +89,7 @@ class ItemRepository(
     suspend fun delete(id: Long) = itemDao.deleteById(id)
 
     /**
-     * Puts a deleted [item] back exactly as it was (same id, done state, pin and times) in
+     * Puts a deleted [item] back exactly as it was (same id, done state and times) in
      * one write. No purchase is recorded; that happened when it was ticked off.
      */
     suspend fun restore(item: ItemEntity): Long = itemDao.insert(item)
@@ -86,12 +97,14 @@ class ItemRepository(
     /** Removes all ticked-off items; returns how many. */
     suspend fun clearDone(): Int = itemDao.deleteDone()
 
-    /** Open items with their category's shop tags resolved, for shop matching. */
+    /** Open items with what kind of product each is (see [AssortmentService]), for shop matching. */
     suspend fun openItemsForMatching(): List<ItemInfo> {
         val categories = categoryDao.getAll().associateBy { it.id }
         val fallback = categories.values.firstOrNull { it.slug == CategoryCatalog.FALLBACK_SLUG }
+        val answers = assortments.cache()
         return itemDao.getOpen().map { item ->
-            item.toItemInfo(item.categoryId?.let { categories[it] } ?: fallback)
+            val category = item.categoryId?.let { categories[it] } ?: fallback
+            item.toItemInfo(category, AssortmentService.resolve(item.name, category?.slug, answers))
         }
     }
 

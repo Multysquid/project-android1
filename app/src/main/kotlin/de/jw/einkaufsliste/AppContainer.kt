@@ -2,6 +2,7 @@ package de.jw.einkaufsliste
 
 import android.content.Context
 import de.jw.einkaufsliste.data.db.AppDatabase
+import de.jw.einkaufsliste.data.repo.AssortmentService
 import de.jw.einkaufsliste.data.net.createHttpClient
 import de.jw.einkaufsliste.data.repo.CategoryRepository
 import de.jw.einkaufsliste.data.repo.ItemRepository
@@ -34,7 +35,15 @@ class AppContainer(context: Context) {
 
     val categoryRepository: CategoryRepository by lazy { CategoryRepository(database) }
     val itemRepository: ItemRepository by lazy {
-        ItemRepository(database) { item -> appScope.launch { purchaseRecorder.onItemBought(item) } }
+        ItemRepository(
+            database,
+            assortmentService,
+            onItemBought = { item -> appScope.launch { purchaseRecorder.onItemBought(item) } },
+            onItemNamed = { name -> appScope.launch { assortmentService.classify(name) } },
+        )
+    }
+    val assortmentService: AssortmentService by lazy {
+        AssortmentService(database, settingsRepository, apiKeyStore, geminiClient)
     }
     val shopRepository: ShopRepository by lazy { ShopRepository(database, httpClient, settingsRepository) }
     val matchService: MatchService by lazy { MatchService(database, itemRepository, shopRepository) }

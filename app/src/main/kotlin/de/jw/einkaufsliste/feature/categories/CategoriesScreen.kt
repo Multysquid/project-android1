@@ -50,7 +50,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.jw.einkaufsliste.AppContainer
 import de.jw.einkaufsliste.core.catalog.CategoryCatalog
 import de.jw.einkaufsliste.data.db.CategoryEntity
-import de.jw.einkaufsliste.data.db.osmTagList
 import kotlinx.coroutines.launch
 
 /** Sentinel for "the new-category dialog is open" in the saveable dialog state. */
@@ -127,7 +126,7 @@ fun CategoriesScreen(container: AppContainer, onBack: () -> Unit) {
                 item(key = "intro", contentType = "intro") {
                     Text(
                         text = "In dieser Reihenfolge erscheinen die Unterlisten auf der Einkaufsliste. " +
-                            "Die Ladentypen bestimmen, bei welchen Läden in der Nähe sich die App meldet.",
+                            "In welchen Läden ein Artikel gesucht wird, erkennt die App am Artikel selbst.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -138,6 +137,7 @@ fun CategoriesScreen(container: AppContainer, onBack: () -> Unit) {
                         category = category,
                         canMoveUp = index > 0,
                         canMoveDown = index < categories.lastIndex,
+                        itemCount = state?.itemCounts?.get(category.id) ?: 0,
                         onMoveUp = { viewModel.move(category.id, -1) },
                         onMoveDown = { viewModel.move(category.id, +1) },
                         onClick = { editingId = category.id },
@@ -233,6 +233,7 @@ private fun CategoryRow(
     category: CategoryEntity,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
+    itemCount: Int,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onClick: () -> Unit,
@@ -243,7 +244,15 @@ private fun CategoryRow(
         leadingContent = { Text(category.emoji, fontSize = 24.sp) },
         headlineContent = { Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = {
-            Text(shopTypesSummary(category), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                when (itemCount) {
+                    0 -> "Leer"
+                    1 -> "1 Artikel"
+                    else -> "$itemCount Artikel"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         },
         trailingContent = {
             Row {
@@ -256,14 +265,4 @@ private fun CategoryRow(
             }
         },
     )
-}
-
-/** "Supermarkt, Bäckerei, Lebensmittelladen …" (at most three labels). */
-private fun shopTypesSummary(category: CategoryEntity): String {
-    val labels = category.osmTagList().map { CategoryCatalog.shopTagLabel(it) }.distinct()
-    return when {
-        labels.isEmpty() -> "Keine Ladentypen"
-        labels.size <= 3 -> labels.joinToString(", ")
-        else -> labels.take(3).joinToString(", ") + " …"
-    }
 }

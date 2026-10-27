@@ -2,9 +2,13 @@
 
 Android-App für eine Einkaufsliste, die lokal auf dem Handy läuft. Artikel kommen per
 Eintippen, Foto (Gemini, eigener API-Schlüssel) oder Barcode auf die Liste und werden
-automatisch in Unterlisten nach Kategorie sortiert. Im Hintergrund prüft die App, ob ein
-Laden im eingestellten Umkreis (Standard 500 m) wahrscheinlich etwas von der Liste führt,
-und meldet sich dann.
+automatisch in Unterlisten nach Kategorie sortiert. Bei jeder Prüfung im Hintergrund (Abstand
+einstellbar, Standard 15 Minuten) sucht die App jeden Artikel automatisch in allen Läden im
+Umkreis (einstellbar, Standard 1 km) und meldet sich, wenn ein Laden ihn im Sortiment hat.
+Niemand muss Artikel einem Laden zuordnen: Die App erkennt, was für ein Produkt ein Artikel ist
+(eingebaute Wortliste, genauer mit Gemini), und kennt das übliche Sortiment der großen Ketten
+(Lidl, Aldi, Rewe, Edeka, dm, Rossmann, OBI, MediaMarkt und viele mehr) und aller anderen
+Ladenarten. Echte Lagerbestände veröffentlichen die Läden nicht.
 
 Der Plan dazu steht in `/mnt/project-files/plan/shopping-list-app-plan.md`, technische
 Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -51,7 +55,7 @@ ohne Android SDK testen:
    die App installieren und die Sperre danach wieder einschalten.
 3. In der App unter *Einstellungen* „Läden in der Nähe prüfen“ einschalten, beim Standort
    „Genau“ und danach „Immer zulassen“ wählen und *Samsung-Akku einrichten* durchgehen.
-4. Optional, für Fotos: unter *Einstellungen → Foto-Erkennung (Gemini)* einen eigenen
+4. Optional, für Fotos und genaueres Einordnen: unter *Einstellungen → Gemini* einen eigenen
    Gemini-API-Schlüssel eintragen (erhältlich in Google AI Studio).
 
 Die APK ist mit einem Debug-Schlüssel signiert, den jeder Build neu erzeugt. Lässt sich eine
@@ -65,6 +69,7 @@ nutzen, die alte App deinstallieren, die neue installieren und die Liste wieder 
 | OpenStreetMap (Overpass-Server `overpass-api.de`, bei Störung ersatzweise `overpass.private.coffee`) | Läden in der Umgebung | Ein ungefährer Bereich: dein Standort auf etwa 100 m gerundet und der Umkreis |
 | Open Food Facts und Schwesterdatenbanken (Open Products/Beauty/Pet Food Facts) | Barcode → Produktname | Nur der Barcode |
 | Google Gemini (dein Schlüssel, nur bei „Foto“) | Foto → Name und Unterliste | Das Foto und die Namen deiner Unterlisten |
+| Google Gemini (dein Schlüssel, nur mit „Artikel mit Gemini einordnen“) | Artikel → Produktart, damit die App weiß, in welchen Läden es ihn gibt | Nur der Name eines neuen Artikels, einmal pro Name |
 | Google ML Kit (Barcode-Scanner) | Barcode lesen, auf dem Gerät | Keine Bilder; laut Google aber Nutzungs- und Leistungsdaten des Scanners (z. B. Gerätemodell, App-Version, Fehlercodes) |
 
 Alles andere (Liste, Einkaufsverlauf, Einstellungen) bleibt auf dem Gerät. Auch die

@@ -87,13 +87,13 @@ class CategoryRepository(private val db: AppDatabase) {
         missing.size
     }
 
-    suspend fun add(name: String, emoji: String, osmTags: List<String>): Long =
+    suspend fun add(name: String, emoji: String): Long =
         dao.insert(
             CategoryEntity(
                 slug = CUSTOM_SLUG_PREFIX + UUID.randomUUID().toString(),
                 name = name.trim(),
                 emoji = emoji.trim().ifEmpty { "🛒" },
-                osmTags = osmTags.toOsmTagsColumn(),
+                osmTags = "",
                 sortOrder = dao.maxSortOrder() + 1,
             ),
         )
@@ -104,7 +104,7 @@ class CategoryRepository(private val db: AppDatabase) {
     suspend fun reorder(categories: List<CategoryEntity>) =
         dao.updateAll(categories.mapIndexed { index, category -> category.copy(sortOrder = index) })
 
-    /** Restores name, emoji and shop types of a default category. No-op for custom categories. */
+    /** Restores name and emoji of a default category. No-op for custom categories. */
     suspend fun resetToDefault(category: CategoryEntity) {
         val def = CategoryCatalog.bySlug(category.slug) ?: return
         dao.update(category.copy(name = def.name, emoji = def.emoji, osmTags = def.osmTags.toOsmTagsColumn()))

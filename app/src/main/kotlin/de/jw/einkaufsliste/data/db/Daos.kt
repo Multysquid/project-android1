@@ -85,6 +85,21 @@ interface BarcodeCacheDao {
 }
 
 @Dao
+interface AssortmentCacheDao {
+    @Query("SELECT * FROM assortment_cache")
+    fun observeAll(): Flow<List<AssortmentCacheEntity>>
+
+    @Query("SELECT * FROM assortment_cache")
+    suspend fun getAll(): List<AssortmentCacheEntity>
+
+    @Upsert
+    suspend fun upsert(entry: AssortmentCacheEntity)
+
+    @Query("DELETE FROM assortment_cache WHERE fetchedAt < :before")
+    suspend fun deleteBefore(before: Long)
+}
+
+@Dao
 interface ShopDao {
     @Query("SELECT * FROM shops")
     fun observeAll(): Flow<List<ShopEntity>>

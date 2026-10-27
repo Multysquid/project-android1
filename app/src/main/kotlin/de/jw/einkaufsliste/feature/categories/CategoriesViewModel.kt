@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.jw.einkaufsliste.AppContainer
 import de.jw.einkaufsliste.data.db.CategoryEntity
-import de.jw.einkaufsliste.data.db.toOsmTagsColumn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -28,7 +27,6 @@ data class CategoriesUiState(
 data class CategoryDraft(
     val name: String,
     val emoji: String,
-    val osmTags: List<String>,
 )
 
 class CategoriesViewModel(container: AppContainer) : ViewModel() {
@@ -64,14 +62,13 @@ class CategoriesViewModel(container: AppContainer) : ViewModel() {
     fun save(categoryId: Long?, draft: CategoryDraft) {
         viewModelScope.launch {
             if (categoryId == null) {
-                repository.add(draft.name, draft.emoji, draft.osmTags)
+                repository.add(draft.name, draft.emoji)
             } else {
                 val current = repository.getById(categoryId) ?: return@launch
                 repository.update(
                     current.copy(
                         name = draft.name,
                         emoji = draft.emoji.ifEmpty { current.emoji },
-                        osmTags = draft.osmTags.toOsmTagsColumn(),
                     ),
                 )
             }

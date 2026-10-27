@@ -3,7 +3,7 @@ package de.jw.einkaufsliste.feature.list
 import de.jw.einkaufsliste.core.catalog.CategoryCatalog
 import de.jw.einkaufsliste.data.db.ShopEntity
 
-/** Shown for a pinned shop that is no longer in the shop cache. */
+/** Shown for a shop (in the purchase history) that is no longer in the shop cache. */
 internal const val MISSING_SHOP_LABEL = "Laden nicht mehr gespeichert"
 
 /** German shop type, e.g. "Supermarkt". */

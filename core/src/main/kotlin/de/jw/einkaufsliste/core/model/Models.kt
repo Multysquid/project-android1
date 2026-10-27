@@ -1,14 +1,16 @@
 package de.jw.einkaufsliste.core.model
 
+import de.jw.einkaufsliste.core.catalog.Assortment
+
 /** A WGS84 coordinate. */
 data class GeoPoint(val lat: Double, val lon: Double)
 
 /**
- * A category as the domain logic sees it.
+ * A category (Unterliste) as the domain logic sees it.
  *
- * [osmTags] are OpenStreetMap tags in `key=value` form (for example
- * `shop=supermarket` or `amenity=pharmacy`) of shops that usually sell items of
- * this category.
+ * [osmTags] are OpenStreetMap tags in `key=value` form (`shop=supermarket`) that earlier
+ * versions used for matching. Matching now goes by [ItemInfo.assortments]; the tags are
+ * only kept so backups stay compatible.
  */
 data class CategoryDef(
     val slug: String,
@@ -36,13 +38,15 @@ data class ShopInfo(
     val point: GeoPoint get() = GeoPoint(lat, lon)
 }
 
-/** An open shopping-list item, with the shop tags of its category already resolved. */
+/**
+ * An open shopping-list item and what kind of product it is. [assortments] is empty when
+ * the app could not tell; such an item is looked for in broad stores (see [ShopMatcher]).
+ */
 data class ItemInfo(
     val id: Long,
     val name: String,
     val categorySlug: String?,
-    val osmTags: List<String>,
-    val pinnedShopId: String?,
+    val assortments: Set<Assortment>,
 )
 
 /** "Item with this (normalized) name was bought at this shop." */
@@ -56,7 +60,7 @@ data class PurchaseInfo(
  * A shop that probably carries some of the open items.
  *
  * [learnedItemIds] are the ids of [items] that matched because of purchase history
- * rather than (or in addition to) the category.
+ * rather than (or in addition to) the shop's assortment.
  */
 data class ShopMatch(
     val shop: ShopInfo,

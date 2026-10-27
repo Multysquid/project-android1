@@ -216,11 +216,13 @@ private fun SettingsContent(
         GeminiSection(
             hasKey = hasApiKey,
             storedModel = settings.geminiModel,
+            classifyItems = settings.classifyWithGemini,
             keyTestRunning = keyTestRunning,
             onSaveKey = viewModel::saveApiKey,
             onTestKey = viewModel::testApiKey,
             onDeleteKey = viewModel::deleteApiKey,
             onSaveModel = viewModel::setGeminiModel,
+            onClassifyItemsChange = viewModel::setClassifyWithGemini,
             onMessage = viewModel::showMessage,
             modifier = Modifier.onPlaced { geminiTop = it.positionInParent().y.roundToInt() },
         )
@@ -228,7 +230,7 @@ private fun SettingsContent(
         SectionHeader("Allgemein")
         NavigationRow(
             title = "Unterlisten bearbeiten",
-            subtitle = "Reihenfolge, Namen und passende Ladentypen",
+            subtitle = "Reihenfolge, Namen und Symbole",
             icon = Icons.AutoMirrored.Filled.List,
             onClick = onOpenCategories,
         )

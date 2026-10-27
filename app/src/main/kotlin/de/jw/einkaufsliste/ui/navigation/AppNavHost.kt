@@ -28,7 +28,7 @@ object Routes {
     /** Optional argument of the settings screen: the section to scroll to, e.g. [SECTION_GEMINI]. */
     const val ARG_SECTION = "section"
 
-    /** Settings section "Foto-Erkennung (Gemini)", where the API key is entered. */
+    /** Settings section "Gemini", where the API key is entered. */
     const val SECTION_GEMINI = "gemini"
 
     /** Route pattern of the settings destination; [SETTINGS] alone opens it at the top. */

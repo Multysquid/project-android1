@@ -32,6 +32,8 @@ data class AppSettings(
     val respectOpeningHours: Boolean = true,
     val cooldownHours: Int = 3,
     val geminiModel: String = GeminiApi.DEFAULT_MODEL,
+    /** Ask Gemini what kind of product each new item is (only with an API key; see AssortmentService). */
+    val classifyWithGemini: Boolean = true,
     val batterySetupDone: Boolean = false,
     /** The user hid the list's card that says the shop check is off. */
     val hideCheckBanner: Boolean = false,
@@ -39,7 +41,7 @@ data class AppSettings(
     val quietHours: QuietHours? get() = if (quietHoursEnabled) QuietHours(quietStartMinute, quietEndMinute) else null
 
     companion object {
-        const val DEFAULT_RADIUS_METERS = 500
+        const val DEFAULT_RADIUS_METERS = 1000
         const val MIN_RADIUS_METERS = 100
         const val MAX_RADIUS_METERS = 5000
     }
@@ -67,6 +69,7 @@ class SettingsRepository(context: Context) {
             prefs[Keys.respectOpeningHours] = next.respectOpeningHours
             prefs[Keys.cooldownHours] = next.cooldownHours.coerceIn(1, 48)
             prefs[Keys.geminiModel] = next.geminiModel.trim().ifEmpty { GeminiApi.DEFAULT_MODEL }
+            prefs[Keys.classifyWithGemini] = next.classifyWithGemini
             prefs[Keys.batterySetupDone] = next.batterySetupDone
             prefs[Keys.hideCheckBanner] = next.hideCheckBanner
         }
@@ -102,6 +105,7 @@ class SettingsRepository(context: Context) {
             respectOpeningHours = this[Keys.respectOpeningHours] ?: defaults.respectOpeningHours,
             cooldownHours = this[Keys.cooldownHours] ?: defaults.cooldownHours,
             geminiModel = this[Keys.geminiModel] ?: defaults.geminiModel,
+            classifyWithGemini = this[Keys.classifyWithGemini] ?: defaults.classifyWithGemini,
             batterySetupDone = this[Keys.batterySetupDone] ?: defaults.batterySetupDone,
             hideCheckBanner = this[Keys.hideCheckBanner] ?: defaults.hideCheckBanner,
         )
@@ -117,6 +121,7 @@ class SettingsRepository(context: Context) {
         val respectOpeningHours = booleanPreferencesKey("respect_opening_hours")
         val cooldownHours = intPreferencesKey("cooldown_hours")
         val geminiModel = stringPreferencesKey("gemini_model")
+        val classifyWithGemini = booleanPreferencesKey("classify_with_gemini")
         val batterySetupDone = booleanPreferencesKey("battery_setup_done")
         val hideCheckBanner = booleanPreferencesKey("hide_check_banner")
         val fetchLat = doublePreferencesKey("shop_fetch_lat")

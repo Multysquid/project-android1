@@ -1,8 +1,5 @@
 package de.jw.einkaufsliste.feature.list
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,11 +64,6 @@ import kotlinx.coroutines.launch
 /** Collapse key for the section of items whose category is missing. */
 private const val NO_CATEGORY_KEY = -1L
 
-private val LOCATION_PERMISSIONS = arrayOf(
-    Manifest.permission.ACCESS_FINE_LOCATION,
-    Manifest.permission.ACCESS_COARSE_LOCATION,
-)
-
 /** The shopping list, grouped into "Unterlisten"; the app's start screen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,8 +76,6 @@ fun ListScreen(
 ) {
     val viewModel: ListViewModel = viewModel { ListViewModel(container) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val here by viewModel.here.collectAsStateWithLifecycle()
-    val shopLoad by viewModel.shopLoad.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -99,24 +89,6 @@ fun ListScreen(
     // How often each item was restored. "Rückgängig" brings an item back with its old id; its
     // row needs a new list key, or the lazy list restores the old row's swiped-away state.
     val restores = remember { mutableStateMapOf<Long, Int>() }
-
-    // "Läden laden" in the shop picker: the picker explains why the location is needed, then
-    // Android asks for it.
-    val locationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        if (container.locationProvider.hasForegroundPermission()) {
-            // The dialog does not restart the activity; a check schedule cancelled for the
-            // missing permission would otherwise stay off until the app is opened again.
-            container.appScope.launch { container.checkScheduler.apply(appInForeground = true) }
-        }
-        viewModel.loadShops()
-    }
-    val loadShops: () -> Unit = {
-        if (container.locationProvider.hasForegroundPermission()) {
-            viewModel.loadShops()
-        } else {
-            locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
-        }
-    }
 
     val deleteItem: (ItemEntity) -> Unit = { item ->
         viewModel.delete(item.id)
@@ -194,9 +166,6 @@ fun ListScreen(
                         ) { item ->
                             ItemRow(
                                 item = item,
-                                pinnedShopName = item.pinnedShopId?.let { id ->
-                                    state.shops[id]?.displayName() ?: if (state.shopsLoaded) MISSING_SHOP_LABEL else "…"
-                                },
                                 onCheckedChange = { done -> viewModel.setDone(item.id, done) },
                                 onClick = { editingId = item.id },
                                 onDelete = { deleteItem(item) },
@@ -223,11 +192,7 @@ fun ListScreen(
             item = null,
             categories = state.categories,
             existingItems = state.allItems,
-            shops = state.shops,
-            here = here,
-            shopLoad = shopLoad,
-            onRequestLocation = viewModel::locate,
-            onLoadShops = loadShops,
+            assortmentAnswers = state.assortmentAnswers,
             onDismiss = { showAddDialog = false },
             onSave = { draft ->
                 showAddDialog = false
@@ -245,11 +210,7 @@ fun ListScreen(
                 item = editing,
                 categories = state.categories,
                 existingItems = state.allItems,
-                shops = state.shops,
-                here = here,
-                shopLoad = shopLoad,
-                onRequestLocation = viewModel::locate,
-                onLoadShops = loadShops,
+                assortmentAnswers = state.assortmentAnswers,
                 onDismiss = { editingId = null },
                 onSave = { draft ->
                     editingId = null

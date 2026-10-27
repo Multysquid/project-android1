@@ -55,14 +55,14 @@ No DI framework: `AppContainer` holds everything; get it with
 | Package | Content |
 |---|---|
 | `core/.../core/model` | Domain data classes shared by everything |
-| `core/.../core/catalog` | German default categories, shop-tag labels, `CategoryGuesser` |
+| `core/.../core/catalog` | German default categories, shop-tag labels, `CategoryGuesser`; `Assortment`, `StoreCatalog`, `AssortmentGuesser` for matching |
 | `core/.../core/match` | `ShopMatcher` |
 | `core/.../core/notify` | Quiet hours and per-shop cooldown |
 | `core/.../core/geofence` | Which shops get a geofence |
 | `core/.../core/osm` | Overpass query/parser, `opening_hours` evaluation |
 | `core/.../core/products` | Open*Facts URL, parser, category mapping, barcode check digits |
 | `core/.../core/gemini` | Gemini request body, response parsing, German error messages |
-| `app/.../data` | Room, DataStore settings, API key store, HTTP helper, repositories, `MatchService` |
+| `app/.../data` | Room, DataStore settings, API key store, HTTP helper, repositories, `MatchService`, `AssortmentService` |
 | `app/.../ui` | Theme, navigation, notification channels, shared `CategoryPicker` |
 | `app/.../feature/list` + `categories` | List screen with Unterlisten, add/edit, category editor |
 | `app/.../feature/scan`, `photo`, `products`, `gemini`, `camera` | Barcode scanner, photo capture, lookups; `camera` holds camera permission handling, CameraX preview binding and the add-item bottom sheet |
@@ -84,9 +84,12 @@ The converter accepts only the SVG subset it documents and fails on anything els
 ## Data model
 
 See `app/.../data/db/Entities.kt`. Categories have a stable `slug` (defaults from
-`CategoryCatalog`, `custom_<uuid>` for user ones) and comma-separated `osmTags`.
-Items reference a category (`SET NULL` on delete; the repository moves items to
-"Sonstiges" first). Shops are cached OSM objects with id `node/123`.
+`CategoryCatalog`, `custom_<uuid>` for user ones) and comma-separated `osmTags`, which
+version 1 matched shops by and which are now only kept for backups (as is the item's
+`pinnedShopId`). Items reference a category (`SET NULL` on delete; the repository moves
+items to "Sonstiges" first). Shops are cached OSM objects with id `node/123`.
+`assortment_cache` (database version 2, `MIGRATION_1_2`) holds Gemini's answer per
+normalized item name.
 
 The default categories are inserted by `CategoryRepository.ensureSeeded()` (started in
 `EinkaufApp.onCreate`, once per process behind a mutex). Every category read of the
@@ -112,22 +115,37 @@ Gemini key (used by the photo screen). Settings and "In der Nähe" link to each 
 
 ## Matching ("a shop nearby has the product")
 
-Shops do not publish stock, so matching is by category:
+Shops do not publish stock, and nobody assigns items to shops. Matching goes by
+assortment ("Sortiment", `core/.../catalog/Assortment.kt`, a fixed list of product kinds
+finer than the Unterlisten):
 
-1. A shop within the radius matches an item when the shop's tag (e.g.
-   `shop=supermarket`) is in the item's category `osmTags`.
-2. It also matches when the item (normalized name) was bought at that shop before
-   (purchase history, recorded when an item is ticked off within ~75 m of a shop).
-3. An item pinned to a shop matches only that shop. The picker lists the cached shops;
-   when there are none it offers "Läden laden" (asks for the location permission, then
-   `ShopRepository.ensureShopsAround`).
-4. Shops are ranked by number of matched items (learned matches weigh extra), then
-   distance. Duplicate OSM objects for the same shop are merged.
+1. Each item gets its assortments from `AssortmentService.resolve`: Gemini's cached
+   answer for the normalized name if there is one, else `AssortmentGuesser.guess` (German
+   keyword tables, longest keyword wins, falling back to the item's Unterliste). Gemini
+   (`GeminiApi.buildAssortmentRequest`, only the name is sent) is asked once per name when
+   the item is added or edited and, for items added offline or before a key was saved,
+   at the start of each check (at most 5 per check). Setting "Artikel mit Gemini
+   einordnen", on by default, needs a key. Answers are re-asked after 180 days.
+2. Each shop gets its assortments from `StoreCatalog.assortmentsOf`: about 100 German
+   chains by `brand`, then `name` (whole words, restricted to fitting OSM tags so a bakery
+   called Müller is not the drugstore), else the generic assortment of its OSM tag.
+   Medicines only match `amenity=pharmacy`.
+3. A shop within the radius matches an item when it sells one of the item's assortments.
+   An item the app could not classify matches only broad shops (hypermarkets,
+   department and variety stores). An item also matches every shop it was bought at
+   before (purchase history, recorded when an item is ticked off within ~75 m of a shop).
+4. Shops are ranked by number of matched items, learned matches and known chains weigh
+   extra, then distance. Duplicate OSM objects for the same shop are merged.
+
+The item dialog shows "Wird automatisch gesucht" with the assortments and example chains
+(`StoreCatalog.exampleChains`), so the user sees where an item will be looked for.
 
 ## Background check
 
 Settings: interval (1, 2, 5, 10, 15, 30, 60 min; default 15), radius (default
-500 m), quiet hours, opening hours, per-shop cooldown.
+1 km), quiet hours, opening hours, per-shop cooldown. Every check matches all open items
+against every cached shop in the radius again, so a new item is looked for at the next
+check.
 
 - Interval >= 15 min: WorkManager unique periodic work.
 - Interval < 15 min: foreground service of type `location` with a permanent
@@ -137,7 +155,7 @@ Settings: interval (1, 2, 5, 10, 15, 30, 60 min; default 15), radius (default
   (max 90), refreshed on each check, re-registered after boot.
 - Each check: location -> refresh shop cache if needed (Overpass, download
   radius max(3 km, 4x radius) up to 10 km, refresh after 7 days or when leaving
-  the downloaded area) -> match -> filter closed shops / quiet hours / cooldown ->
+  the downloaded area) -> classify new items with Gemini -> match -> filter closed shops / quiet hours / cooldown ->
   notify (max 3 shops per check) -> update geofences.
 - The foreground service is started only when background location is granted
   or the app is in the foreground; otherwise only the 15-minute WorkManager
@@ -158,6 +176,7 @@ Settings: interval (1, 2, 5, 10, 15, 30, 60 min; default 15), radius (default
 | Overpass API (OpenStreetMap): `overpass-api.de`, fallback `overpass.private.coffee` | Shop locations | Approximate area (center rounded to 3 decimals, about 100 m, + radius) |
 | Open Food Facts and sister DBs (Open Products/Beauty/Pet Food Facts) | Barcode -> product name | The barcode |
 | Gemini API (user's own key) | Photo -> name + category | The photo and the names of all categories, including the user's own (`GeminiApi.prompt`) |
+| Gemini API (user's own key, "Artikel mit Gemini einordnen") | Item name -> assortments | The item name only, once per name (`GeminiApi.assortmentPrompt`) |
 | ML Kit barcode scanning (bundled model) | Reading barcodes on the device | No images; per Google's ML Kit disclosure, usage and performance metrics (device model, app version, error codes) |
 
 Attribution shown in the app: "Kartendaten © OpenStreetMap-Mitwirkende (ODbL)",

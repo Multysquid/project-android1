@@ -1,5 +1,7 @@
 package de.jw.einkaufsliste.core.match
 
+import de.jw.einkaufsliste.core.catalog.Assortment
+import de.jw.einkaufsliste.core.catalog.StoreCatalog
 import de.jw.einkaufsliste.core.geo.GeoMath
 import de.jw.einkaufsliste.core.model.GeoPoint
 import de.jw.einkaufsliste.core.model.ItemInfo
@@ -18,16 +20,19 @@ object ShopMatcher {
     /** Extra score per item that was bought at the shop before. */
     const val LEARNED_BONUS = 0.5
 
-    /** Extra score per item pinned to the shop. */
-    const val PINNED_BONUS = 1.0
+    /** Extra score for a shop of a known chain ([StoreCatalog.chains]), so popular stores rank first. */
+    const val CHAIN_BONUS = 0.25
 
     /**
-     * Returns shops within [radiusMeters] of [here] that match at least one item,
-     * best first. An item with a pinned shop matches only that shop.
+     * Returns shops within [radiusMeters] of [here] that probably carry at least one item,
+     * best first. Nobody assigns items to shops: an item matches every shop whose
+     * assortment ([StoreCatalog.assortmentsOf]) contains one of the item's
+     * [ItemInfo.assortments]. An item the app could not classify matches broad shops
+     * ([StoreCatalog.isBroad]). An item also matches every shop it was bought at before.
      *
-     * Score: matched items + [LEARNED_BONUS] per learned item + [PINNED_BONUS] per
-     * pinned item; ties go to the nearer shop, then the lower shop id. Of duplicate
-     * OSM objects for one shop only the best match is kept.
+     * Score: matched items + [LEARNED_BONUS] per learned item + [CHAIN_BONUS] for a known
+     * chain; ties go to the nearer shop, then the lower shop id. Of duplicate OSM objects
+     * for one shop only the best match is kept.
      */
     fun match(
         here: GeoPoint,
@@ -44,7 +49,6 @@ object ShopMatcher {
         val candidates = items.distinctBy { it.id }.map { item ->
             Candidate(
                 item = item,
-                tags = item.osmTags.mapTo(HashSet()) { it.trim() },
                 boughtAt = shopsByItemName[ItemNames.normalize(item.name)].orEmpty(),
             )
         }
@@ -57,7 +61,7 @@ object ShopMatcher {
         return removeDuplicates(matches.sortedWith(ranking))
     }
 
-    private class Candidate(val item: ItemInfo, val tags: Set<String>, val boughtAt: Set<String>)
+    private class Candidate(val item: ItemInfo, val boughtAt: Set<String>)
 
     private val ranking: Comparator<ShopMatch> =
         compareByDescending<ShopMatch> { it.score }
@@ -77,34 +81,27 @@ object ShopMatcher {
         candidates: List<Candidate>,
         itemOrder: Comparator<ItemInfo>,
     ): ShopMatch? {
-        val shopTag = shop.tag.trim()
+        val sells: Set<Assortment> = StoreCatalog.assortmentsOf(shop)
+        val broad = StoreCatalog.isBroad(shop)
         val matched = ArrayList<ItemInfo>()
         val learned = HashSet<Long>()
-        var pinned = 0
         for (candidate in candidates) {
             val item = candidate.item
-            val pinnedShopId = item.pinnedShopId
-            if (pinnedShopId != null) {
-                if (pinnedShopId == shop.id) {
-                    matched += item
-                    pinned++
-                }
-                continue
-            }
-            val byTag = shopTag in candidate.tags
+            val byAssortment = if (item.assortments.isEmpty()) broad else item.assortments.any { it in sells }
             val byHistory = shop.id in candidate.boughtAt
-            if (byTag || byHistory) {
+            if (byAssortment || byHistory) {
                 matched += item
                 if (byHistory) learned += item.id
             }
         }
         if (matched.isEmpty()) return null
+        val chainBonus = if (StoreCatalog.chainFor(shop) != null) CHAIN_BONUS else 0.0
         return ShopMatch(
             shop = shop,
             distanceMeters = distance,
             items = matched.sortedWith(itemOrder),
             learnedItemIds = learned,
-            score = matched.size + LEARNED_BONUS * learned.size + PINNED_BONUS * pinned,
+            score = matched.size + LEARNED_BONUS * learned.size + chainBonus,
         )
     }
 

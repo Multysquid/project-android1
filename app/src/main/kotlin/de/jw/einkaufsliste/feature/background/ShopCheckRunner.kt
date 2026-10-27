@@ -28,7 +28,8 @@ data class CheckOutcome(val notifiedShops: Int, val matchingShops: Int, val mess
 
 /**
  * The shop check shared by WorkManager, the foreground service, geofences and the manual
- * "Jetzt prüfen": location -> shop cache -> matching -> filters -> notifications -> geofences.
+ * "Jetzt prüfen": location -> shop cache -> classify new items -> matching every shop in the
+ * radius -> filters -> notifications -> geofences.
  */
 class ShopCheckRunner(private val context: Context, private val container: AppContainer) {
     private val notifier by lazy { ShopNotifier(context) }
@@ -80,6 +81,8 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
 
         // A failed download is fine as long as the cache has shops here.
         val refresh = runLogging(TAG, "Shop refresh failed") { container.shopRepository.ensureShopsAround(here) }
+        // Items are classified when they are added; this catches those added offline or before a Gemini key was set.
+        container.assortmentService.classifyOpenItems()
 
         val radius = settings.radiusMeters
         val geofenceIds = if (trigger == CheckTrigger.GEOFENCE) geofenceShopIds.toSet() else emptySet()
@@ -183,13 +186,14 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
         return shop.tag.trim() + "|" + ItemNames.normalize(label)
     }
 
-    /** Drops old cooldown entries and purchase history; at most every few hours. */
+    /** Drops old cooldown entries, purchase history and Gemini answers; at most every few hours. */
     private suspend fun housekeeping() {
         val now = System.currentTimeMillis()
         if (now - lastHousekeepingAt < HOUSEKEEPING_INTERVAL_MS) return
         lastHousekeepingAt = now
         container.database.notificationLogDao().deleteBefore(now - NOTIFICATION_LOG_MAX_AGE_MS)
         container.database.purchaseDao().deleteBefore(now - PURCHASE_MAX_AGE_MS)
+        container.database.assortmentCacheDao().deleteBefore(now - ASSORTMENT_MAX_AGE_MS)
     }
 
     private companion object {
@@ -201,5 +205,8 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
         val HOUSEKEEPING_INTERVAL_MS: Long = TimeUnit.HOURS.toMillis(6)
         val NOTIFICATION_LOG_MAX_AGE_MS: Long = TimeUnit.DAYS.toMillis(7)
         val PURCHASE_MAX_AGE_MS: Long = TimeUnit.DAYS.toMillis(2 * 365)
+
+        /** Gemini is asked again about names it classified this long ago (and that are still on the list). */
+        val ASSORTMENT_MAX_AGE_MS: Long = TimeUnit.DAYS.toMillis(180)
     }
 }

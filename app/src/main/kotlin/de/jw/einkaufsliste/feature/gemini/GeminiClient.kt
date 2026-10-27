@@ -1,5 +1,6 @@
 package de.jw.einkaufsliste.feature.gemini
 
+import de.jw.einkaufsliste.core.catalog.Assortment
 import de.jw.einkaufsliste.core.gemini.GeminiApi
 import de.jw.einkaufsliste.core.gemini.GeminiException
 import de.jw.einkaufsliste.core.model.RecognizedItem
@@ -24,7 +25,8 @@ import java.util.Base64
 class GeminiSettingsException(message: String) : Exception(message)
 
 /**
- * Recognizes photographed items with the user's own Gemini API key. Every failure is
+ * Recognizes photographed items and classifies item names (what kind of product, for the
+ * shop search) with the user's own Gemini API key. Every failure is
  * a [Result.failure] whose message is German and can be shown as is; it is a
  * [GeminiSettingsException] when the fix is in the settings.
  */
@@ -51,6 +53,20 @@ class GeminiClient(
             val response = http.fetch(request)
             if (!response.isSuccessful) throw httpError(response.code, response.body)
             GeminiApi.parseResponse(response.body, categories.map { it.slug }.toSet())
+        }
+    }
+
+    /** Asks Gemini what kind of product [itemName] is; only the name is sent. Failures carry a German message. */
+    suspend fun classify(itemName: String): Result<Set<Assortment>> = withContext(Dispatchers.IO) {
+        guarded {
+            val apiKey = apiKeyStore.get() ?: throw GeminiSettingsException(MESSAGE_NO_KEY)
+            val model = modelName(settings.current().geminiModel)
+            val request = requestBuilder(GeminiApi.endpoint(model), apiKey)
+                .post(GeminiApi.buildAssortmentRequest(itemName).toRequestBody(JSON))
+                .build()
+            val response = http.fetch(request)
+            if (!response.isSuccessful) throw httpError(response.code, response.body)
+            GeminiApi.parseAssortments(response.body)
         }
     }
 

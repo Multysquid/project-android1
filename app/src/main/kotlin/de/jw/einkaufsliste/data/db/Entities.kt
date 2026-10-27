@@ -9,7 +9,8 @@ import androidx.room.PrimaryKey
 /**
  * A category ("Unterliste"). [slug] is stable for the seeded defaults (see
  * CategoryCatalog) and `custom_<uuid>` for user-created ones. [osmTags] is a
- * comma-separated list such as `shop=supermarket,shop=convenience`.
+ * comma-separated list such as `shop=supermarket,shop=convenience`; earlier versions
+ * matched shops by it, now it is only kept for backups.
  */
 @Entity(tableName = "categories", indices = [Index(value = ["slug"], unique = true)])
 data class CategoryEntity(
@@ -45,7 +46,10 @@ data class ItemEntity(
     val done: Boolean = false,
     val doneAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    /** Shop id (`node/123`) the user pinned this item to; it then only matches that shop. */
+    /**
+     * Shop id (`node/123`) an earlier version let the user pin this item to. Unused since
+     * items are matched to every fitting shop automatically; kept for backups.
+     */
     val pinnedShopId: String? = null,
     val source: ItemSource = ItemSource.MANUAL,
 )
@@ -60,6 +64,18 @@ data class BarcodeCacheEntity(
     val categorySlug: String,
     /** "openfoodfacts", "openproductsfacts", ..., or "user" when typed in by hand. */
     val source: String,
+    val fetchedAt: Long,
+)
+
+/**
+ * What kind of product an item name is, as Gemini answered it (see AssortmentService).
+ * [nameKey] is the name normalized with ItemNames.normalize; [assortments] are
+ * comma-separated Assortment slugs, empty when Gemini found no product in the name.
+ */
+@Entity(tableName = "assortment_cache")
+data class AssortmentCacheEntity(
+    @PrimaryKey val nameKey: String,
+    val assortments: String,
     val fetchedAt: Long,
 )
 

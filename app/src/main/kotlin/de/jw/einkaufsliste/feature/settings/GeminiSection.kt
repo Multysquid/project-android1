@@ -53,21 +53,24 @@ private const val AI_STUDIO_URL = "https://aistudio.google.com/apikey"
 private fun normalizeModel(input: String): String = input.trim().ifEmpty { GeminiApi.DEFAULT_MODEL }
 
 /**
- * "Foto-Erkennung (Gemini)": the user's own API key (stored encrypted, never shown again
- * once saved) and the model name. [storedModel] is the saved model; edits are saved when
- * the field loses focus, on "Fertig" and when the screen goes away. [modifier] goes to the
- * section as a whole (the settings scroll to it when opened from the photo screen).
+ * "Gemini": the user's own API key (stored encrypted, never shown again once saved), the
+ * model name and whether new items are classified with Gemini ([classifyItems]). [storedModel]
+ * is the saved model; edits are saved when the field loses focus, on "Fertig" and when the
+ * screen goes away. [modifier] goes to the section as a whole (the settings scroll to it when
+ * opened from the photo screen).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun GeminiSection(
     hasKey: Boolean,
     storedModel: String,
+    classifyItems: Boolean,
     keyTestRunning: Boolean,
     onSaveKey: (String) -> Unit,
     onTestKey: (enteredKey: String?, model: String) -> Unit,
     onDeleteKey: () -> Unit,
     onSaveModel: (String) -> Unit,
+    onClassifyItemsChange: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -97,8 +100,11 @@ internal fun GeminiSection(
     }
 
     Column(modifier) {
-        SectionHeader("Foto-Erkennung (Gemini)")
-        SectionText("Mit einem eigenen Gemini-API-Schlüssel erkennt die App Artikel auf Fotos.")
+        SectionHeader("Gemini")
+        SectionText(
+            "Mit einem eigenen Gemini-API-Schlüssel erkennt die App Artikel auf Fotos und weiß bei " +
+                "neuen Artikeln genauer, in welchen Läden es sie gibt.",
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,9 +203,19 @@ internal fun GeminiSection(
                     modelFocused = state.isFocused
                 },
         )
+        SwitchRow(
+            title = "Artikel mit Gemini einordnen",
+            subtitle = if (hasKey) {
+                "Gemini sagt, was für ein Produkt ein neuer Artikel ist, damit die App ihn in den passenden Läden sucht."
+            } else {
+                "Braucht einen Schlüssel. Bis dahin ordnet die App Artikel mit ihrer eingebauten Wortliste ein."
+            },
+            checked = classifyItems,
+            onCheckedChange = onClassifyItemsChange,
+        )
         SectionText(
-            "Nur wenn du ein Foto aufnimmst, schickt die App das Foto und die Namen deiner Unterlisten " +
-                "an Google Gemini, mit deinem eigenen Schlüssel.",
+            "Die App schickt nur in zwei Fällen etwas an Google Gemini, mit deinem eigenen Schlüssel: " +
+                "beim Foto das Foto und die Namen deiner Unterlisten, beim Einordnen den Namen des Artikels.",
         )
     }
 
@@ -207,7 +223,12 @@ internal fun GeminiSection(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Schlüssel löschen?") },
-            text = { Text("Danach kann die App keine Fotos mehr erkennen, bis du wieder einen Schlüssel einträgst.") },
+            text = {
+                Text(
+                    "Danach erkennt die App keine Fotos mehr und ordnet neue Artikel nur mit ihrer Wortliste ein, " +
+                        "bis du wieder einen Schlüssel einträgst.",
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {

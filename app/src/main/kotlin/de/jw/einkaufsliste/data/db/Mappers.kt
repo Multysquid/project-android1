@@ -1,5 +1,6 @@
 package de.jw.einkaufsliste.data.db
 
+import de.jw.einkaufsliste.core.catalog.Assortment
 import de.jw.einkaufsliste.core.model.CategoryDef
 import de.jw.einkaufsliste.core.model.ItemInfo
 import de.jw.einkaufsliste.core.model.PurchaseInfo
@@ -17,14 +18,8 @@ fun CategoryEntity.toDef(): CategoryDef =
 fun CategoryDef.toEntity(): CategoryEntity =
     CategoryEntity(slug = slug, name = name, emoji = emoji, osmTags = osmTags.toOsmTagsColumn(), sortOrder = sortOrder)
 
-fun ItemEntity.toItemInfo(category: CategoryEntity?): ItemInfo =
-    ItemInfo(
-        id = id,
-        name = name,
-        categorySlug = category?.slug,
-        osmTags = category?.osmTagList().orEmpty(),
-        pinnedShopId = pinnedShopId,
-    )
+fun ItemEntity.toItemInfo(category: CategoryEntity?, assortments: Set<Assortment>): ItemInfo =
+    ItemInfo(id = id, name = name, categorySlug = category?.slug, assortments = assortments)
 
 fun ShopEntity.toShopInfo(): ShopInfo =
     ShopInfo(id = id, name = name, brand = brand, lat = lat, lon = lon, tag = tag, openingHours = openingHours)
