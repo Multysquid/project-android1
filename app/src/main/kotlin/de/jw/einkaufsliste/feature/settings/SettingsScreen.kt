@@ -269,7 +269,7 @@ private fun AboutSection() {
     val version = remember { context.appVersionName() }
     SectionHeader("Über")
     ListItem(
-        headlineContent = { Text("Einkaufsliste") },
+        headlineContent = { Text("Demento") },
         supportingContent = { Text(if (version != null) "Version $version" else "Version unbekannt") },
     )
     SectionText("Kartendaten © OpenStreetMap-Mitwirkende (ODbL)")

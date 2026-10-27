@@ -1,7 +1,8 @@
 # Builds the installable APK on every branch push. Pushes to main (and to the first PR
 # branch, until it is merged) also replace the release "apk", so this link always points
 # at the newest build:
-# https://github.com/Multysquid/project-android1/releases/latest/download/einkaufsliste.apk
+# https://github.com/Multysquid/project-android1/releases/latest/download/demento.apk
+# (also published as einkaufsliste.apk, the first link that was handed out).
 name: APK bauen
 
 on:
@@ -76,12 +77,12 @@ jobs:
             -F "output[text]=@errors-short.txt"
 
       - name: APK umbenennen
-        run: cp app/build/outputs/apk/release/app-release.apk einkaufsliste.apk
+        run: cp app/build/outputs/apk/release/app-release.apk demento.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: einkaufsliste-apk
-          path: einkaufsliste.apk
+          name: demento-apk
+          path: demento.apk
           if-no-files-found: error
 
   release:
@@ -94,7 +95,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: einkaufsliste-apk
+          name: demento-apk
 
       - name: Release "apk" ersetzen
         env:
@@ -110,10 +111,13 @@ jobs:
           der App unter Einstellungen „Liste sichern“ exportieren, die alte App deinstallieren,
           die neue installieren und die Liste wieder importieren.
 
+          einkaufsliste.apk ist dieselbe Datei unter dem früheren Namen.
+
           Gebaut aus Commit ${GITHUB_SHA} (Branch ${GITHUB_REF_NAME}, Lauf ${GITHUB_RUN_NUMBER})."
+          cp demento.apk einkaufsliste.apk
           gh release delete apk --yes --cleanup-tag || true
-          gh release create apk einkaufsliste.apk \
+          gh release create apk demento.apk einkaufsliste.apk \
             --target "$GITHUB_SHA" \
-            --title "Einkaufsliste (Build ${GITHUB_RUN_NUMBER})" \
+            --title "Demento (Build ${GITHUB_RUN_NUMBER})" \
             --notes "$notes" \
             --latest

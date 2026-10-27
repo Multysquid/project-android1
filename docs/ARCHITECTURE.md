@@ -1,6 +1,7 @@
 # Architecture
 
-Developer notes for the Einkaufsliste app. The product plan (German) is in
+Developer notes for Demento, the shopping list app (code name and package: Einkaufsliste,
+`de.jw.einkaufsliste`). The product plan (German) is in
 `/mnt/project-files/plan/shopping-list-app-plan.md`.
 
 ## Builds
@@ -13,10 +14,11 @@ Developer notes for the Einkaufsliste app. The product plan (German) is in
 The wrapper is Gradle 8.14, which does not run on JDK 25 (Gradle 9.1+ does).
 
 CI (`.github/workflows/apk.yml`, GitHub Actions) runs the `core` tests and
-`:app:assembleRelease` on every branch push and attaches `einkaufsliste.apk` to the run as
-the artifact `einkaufsliste-apk`. Pushes to `main` (and to `einkaufsliste-app` until it is
+`:app:assembleRelease` on every branch push and attaches `demento.apk` to the run as the
+artifact `demento-apk`. Pushes to `main` (and to `einkaufsliste-app` until it is
 merged) also replace the public release `apk`, so
-`releases/latest/download/einkaufsliste.apk` is always the newest build. A failed build
+`releases/latest/download/demento.apk` is always the newest build (the same file is also
+published as `einkaufsliste.apk`, the app's first download link). A failed build
 posts the Gradle errors as a separate check run named "Build-Fehler". `versionCode` is the
 Actions run number (1 for local builds).
 

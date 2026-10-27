@@ -241,7 +241,7 @@ class ShopCheckService : LifecycleService() {
         }
         return NotificationCompat.Builder(this, Notifications.CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Einkaufsliste prüft Läden in der Nähe")
+            .setContentTitle("Demento prüft Läden in der Nähe")
             .setContentText(text)
             .setContentIntent(openApp)
             .setOngoing(true)

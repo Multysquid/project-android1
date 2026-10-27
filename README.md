@@ -1,4 +1,4 @@
-# Einkaufsliste
+# Demento
 
 Android-App für eine Einkaufsliste, die lokal auf dem Handy läuft. Artikel kommen per
 Eintippen, Foto (Gemini, eigener API-Schlüssel) oder Barcode auf die Liste und werden
@@ -12,7 +12,7 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## APK herunterladen
 
 Die neueste fertige APK gibt es hier:
-<https://github.com/Multysquid/project-android1/releases/latest/download/einkaufsliste.apk>
+<https://github.com/Multysquid/project-android1/releases/latest/download/demento.apk>
 
 GitHub baut sie bei jeder Änderung neu (`.github/workflows/apk.yml`). Den Link einfach auf
 dem Handy öffnen und weiter bei [Auf das Handy bringen](#auf-das-handy-bringen).

@@ -311,7 +311,7 @@ private fun ListTopBar(
     TopAppBar(
         title = {
             Column {
-                Text("Einkaufsliste")
+                Text("Demento")
                 if (subtitle != null) {
                     Text(
                         text = subtitle,

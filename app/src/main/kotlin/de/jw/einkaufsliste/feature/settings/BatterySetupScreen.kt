@@ -106,7 +106,7 @@ fun BatterySetupScreen(container: AppContainer, onBack: () -> Unit) {
                 number = 2,
                 title = "Nie in den Standby-Modus",
                 text = "Dort unter Hintergrundnutzungslimits → Apps, die nie in den Standby-Modus wechseln → " +
-                    "Einkaufsliste hinzufügen.",
+                    "Demento hinzufügen.",
             ) {
                 OutlinedButton(onClick = { context.openSamsungBatterySettings() }) {
                     Text("Samsung-Akkueinstellungen öffnen")

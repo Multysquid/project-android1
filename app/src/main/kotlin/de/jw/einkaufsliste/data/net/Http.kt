@@ -8,7 +8,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** User agent sent to OpenStreetMap/Overpass and Open Food Facts, as their usage policies ask. */
-const val USER_AGENT = "Einkaufsliste-Android/0.1 (private, non-commercial)"
+const val USER_AGENT = "Demento-Android/0.1 (private, non-commercial)"
 
 fun createHttpClient(): OkHttpClient =
     OkHttpClient.Builder()
