@@ -190,7 +190,8 @@ internal fun ItemEditDialog(
 private fun SearchedInField(assortments: Set<Assortment>) {
     val text = if (assortments.isEmpty()) {
         val broad = StoreCatalog.exampleChains(emptySet(), limit = 3)
-        "Die Art des Artikels ist unbekannt. Die App sucht ihn in Läden mit großem Sortiment" +
+        "Die Art des Artikels ist unbekannt. Die App sucht ihn in Supermärkten mit Vollsortiment, " +
+            "SB-Warenhäusern und Kaufhäusern" +
             if (broad.isEmpty()) "." else ", z. B. bei ${broad.joinToString(", ")}."
     } else {
         val kinds = assortments.joinToString(", ") { it.label }

@@ -50,13 +50,13 @@ enum class Assortment(val label: String) {
     /** Bed linen, towels, curtains, blankets. */
     HEIMTEXTIL("Heimtextilien"),
 
-    /** Tools, screws, glue, paint, building and repair material. */
+    /** Tools, screws, glue, paint, building and repair material, extension leads, sockets, timers. */
     WERKZEUG("Werkzeug & Baumarkt"),
 
     /** Plants, seeds, potting soil, garden tools, barbecue. */
     GARTEN("Garten & Grill"),
 
-    /** Batteries, light bulbs, cables, extension leads, sockets. */
+    /** Batteries, button cells, light bulbs, fairy lights, simple cables (extension leads are [WERKZEUG]). */
     ELEKTRO_KLEINTEILE("Batterien, Lampen & Kabel"),
 
     /** Devices and accessories: headphones, chargers, phone cases, USB sticks, printer ink, TVs, computers. */
@@ -69,7 +69,7 @@ enum class Assortment(val label: String) {
     SCHREIBWAREN("Schreibwaren & Büro"),
     BUECHER("Bücher"),
 
-    /** Newspapers, magazines, cigarettes, tobacco, lottery. */
+    /** Newspapers, magazines, cigarettes, tobacco, lottery, phone credit. */
     ZEITSCHRIFTEN_TABAK("Zeitschriften & Tabak"),
     KLEIDUNG("Kleidung"),
     SCHUHE("Schuhe"),
@@ -81,7 +81,7 @@ enum class Assortment(val label: String) {
     /** Gift wrap, greeting cards, balloons, party supplies, small gifts. */
     PARTY_GESCHENK("Party & Geschenke"),
 
-    /** Cut flowers and bouquets. */
+    /** Cut flowers, bouquets and potted flowers such as orchids. */
     BLUMEN("Blumen"),
     ;
 

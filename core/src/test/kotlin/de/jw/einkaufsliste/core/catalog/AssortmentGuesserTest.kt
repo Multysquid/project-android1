@@ -79,10 +79,43 @@ class AssortmentGuesserTest {
     @Test
     fun theProductComesBeforeWhatItIsFor() {
         assertGuess(ELEKTRO_KLEINTEILE, "Batterien für die Fernbedienung", "Batterien fuer Fernbedienung")
+        assertGuess(ELEKTRO_KLEINTEILE, "Batterien für Thermometer", "Batterien fürs Thermometer")
+        assertGuess(ELEKTRO_KLEINTEILE, "Batterien für's Thermometer", "Batterien fuers Thermometer")
         assertGuess(MEDIKAMENTE, "Tabletten gegen Kopfschmerzen")
         assertGuess(PARTY_GESCHENK, "Geschenkpapier zum Geburtstag")
+        assertGuess(BROT_BACKWAREN, "Kuchen für Sonntag")
+        assertGuess(TIER, "Futter fürs Kaninchen")
         // Nothing known before "für": the whole name decides.
         assertGuess(TIER, "Leckerli für Katzen")
+    }
+
+    @Test
+    fun petsBikesCarsAndTheHouseholdDecideWhatSomethingIsFor() {
+        assertGuess(TIER, "Shampoo für Hunde", "Spielzeug für Katzen", "Kekse für Hunde", "Milch für Katzen")
+        assertGuess(TIER, "Bett für den Hund", "Bürste für die Katze", "Decke für den Hund")
+        assertGuess(FAHRRAD, "Schloss für das Fahrrad", "Lampe für das Fahrrad", "Korb für das Fahrrad")
+        assertGuess(FAHRRAD, "Reifen für Fahrrad", "Mantel für Fahrrad", "Öl für Fahrradkette")
+        assertGuess(FAHRRAD, "Schlauch fürs Fahrrad", "Schlauch für's Fahrrad", "Schlauch fuers Fahrrad")
+        assertGuess(AUTO, "Öl für das Auto", "Öl fürs Auto", "Batterie fürs Auto", "Wasser für Scheibenwischer")
+        assertGuess(HAUSHALT_REINIGUNG, "Tabletten für die Spülmaschine", "Tabletten für den Geschirrspüler")
+        assertGuess(HAUSHALT_REINIGUNG, "Salz für die Spülmaschine", "Natron zum Putzen")
+        // A baby does not decide: clothes, toys and care products keep their own shops.
+        assertGuess(KLEIDUNG, "Socken für das Baby", "Mütze für Baby")
+        assertGuess(SPIELZEUG, "Spielzeug für das Baby")
+        assertGuess(VORRAT, "Öl für Baby")
+    }
+
+    @Test
+    fun consumablesBesideTheirDeviceCountAsBoth() {
+        assertGuess(setOf(ELEKTRONIK, ELEKTRO_KLEINTEILE), "Batterien Fernbedienung", "Fernbedienung Batterien")
+        assertGuess(setOf(WERKZEUG, ELEKTRO_KLEINTEILE), "Batterien Rauchmelder", "Rauchmelder Batterie")
+        assertGuess(setOf(HAUSHALTSGERAETE, ELEKTRO_KLEINTEILE), "Glühbirne Kühlschrank")
+        assertGuess(setOf(HAUSHALTSGERAETE, HAUSHALT_REINIGUNG), "Entkalker Kaffeemaschine", "Kaffeemaschine Entkalker")
+        assertGuess(setOf(HAUSHALTSGERAETE, HAUSHALT_REINIGUNG), "Reiniger Waschmaschine", "Beutel Staubsauger")
+        // Devices spelled apart stay devices; food is no consumable of them.
+        assertGuess(HAUSHALTSGERAETE, "Wasser Kocher", "Kaffee Maschine", "Kaffee Mühle", "Kaffee Vollautomat")
+        assertGuess(HAUSHALTSGERAETE, "Milch Aufschäumer", "Eier Kocher", "Reis Kocher", "Saft Presse")
+        assertGuess(WERKZEUG, "Akku Schrauber", "Akku-Schrauber")
     }
 
     @Test
@@ -146,8 +179,10 @@ class AssortmentGuesserTest {
         assertGuess(HAUSHALTSWAREN, "Topf", "Kochtöpfe", "Pfanne", "Teller", "Tassen", "Gläser", "Weingläser")
         assertGuess(HAUSHALTSWAREN, "Besteck", "Kochlöffel", "Schneebesen", "Nudelsieb", "Käsereibe", "Deckel")
         assertGuess(HAUSHALTSWAREN, "Brotdose", "Kaffeekanne", "Kaffeebecher", "Kartoffelschäler", "Bügelbrett")
-        assertGuess(HAUSHALTSWAREN, "Kleiderbügel", "Wäschekorb", "Mülleimer", "Pizzaschneider", "Holzspieße")
-        assertGuess(DEKO_WOHNEN, "Bilderrahmen", "Vase", "Spiegel", "Duftkerze", "Stehlampe", "Christbaumkugeln")
+        assertGuess(HAUSHALTSWAREN, "Kleiderbügel", "Wäschekorb", "Mülleimer", "Pizzaschneider")
+        assertGuess(setOf(HAUSHALT_REINIGUNG, HAUSHALTSWAREN), "Holzspieße", "Schaschlikspieße")
+        assertGuess(DEKO_WOHNEN, "Bilderrahmen", "Vase", "Spiegel", "Stehlampe", "Christbaumkugeln")
+        assertGuess(setOf(HAUSHALT_REINIGUNG, DEKO_WOHNEN), "Duftkerze", "Stumpenkerzen")
         assertGuess(HEIMTEXTIL, "Bettwäsche", "Handtücher", "Tischdecke", "Vorhang", "Gardinen", "Wolldecke")
         assertGuess(HEIMTEXTIL, "Duschvorhang", "Geschirrtuch", "Topflappen", "Ofenhandschuh", "Teppich", "Fußmatte")
         assertGuess(MOEBEL, "Stuhl", "Schreibtisch", "Regal", "Kleiderschrank", "Kommode", "Matratze", "Bett")
@@ -160,7 +195,9 @@ class AssortmentGuesserTest {
     fun electricsAreSplitIntoSmallPartsDevicesAndAppliances() {
         assertGuess(ELEKTRO_KLEINTEILE, "Batterie", "AAA Batterien", "Knopfzelle", "CR2032", "9V Block", "Akkus AA")
         assertGuess(ELEKTRO_KLEINTEILE, "Glühbirne", "LED Lampe", "Leuchtmittel", "Taschenlampe", "Lichterkette")
-        assertGuess(ELEKTRO_KLEINTEILE, "Verlängerungskabel", "Steckdosenleiste", "Mehrfachstecker", "Kabeltrommel")
+        assertGuess(ELEKTRO_KLEINTEILE, "Nachtlicht", "Energiesparbirne")
+        assertGuess(WERKZEUG, "Verlängerungskabel", "Steckdosenleiste", "Steckerleiste", "Mehrfachstecker")
+        assertGuess(WERKZEUG, "Kabeltrommel", "Mehrfachsteckdose", "Zeitschaltuhr", "Lichtschalter", "Stecker")
         assertGuess(ELEKTRONIK, "Kabel", "USB-Kabel", "HDMI Kabel", "Ladekabel", "Ladegerät", "Powerbank")
         assertGuess(ELEKTRONIK, "Kopfhörer", "Handyhülle", "Speicherkarte", "Micro SD Karte", "USB-Stick")
         assertGuess(ELEKTRONIK, "Druckerpatrone", "Toner", "Maus", "Tastatur", "Fernseher", "Laptop", "Wecker")
@@ -169,12 +206,28 @@ class AssortmentGuesserTest {
     @Test
     fun diyGardenAndFlowers() {
         assertGuess(WERKZEUG, "Dübel", "Bohrer", "Akkuschrauber", "Silikon", "Wandfarbe", "Pinsel", "Holz")
-        assertGuess(WERKZEUG, "Panzertape", "WD-40", "WD40", "Spachtel", "Kabelbinder", "Sekundenkleber")
+        assertGuess(WERKZEUG, "Panzertape", "WD-40", "WD40", "Spachtel", "Kabelbinder")
+        assertGuess(setOf(SCHREIBWAREN, WERKZEUG), "Sekundenkleber")
         assertGuess(WERKZEUG, "Vorhängeschloss", "Teppichmesser", "Arbeitshandschuhe", "Trittleiter", "Leiter")
         assertGuess(GARTEN, "Blumenerde", "Saatgut", "Dünger", "Grillkohle", "Grillanzünder", "Gartenschlauch")
         assertGuess(GARTEN, "Rasensamen", "Rasenmäher", "Tulpenzwiebeln", "Blumentöpfe", "Heckenschere")
-        assertGuess(GARTEN, "Grillzange", "Briketts", "Sonnenschirm", "Weihnachtsbaum", "Orchidee")
+        assertGuess(GARTEN, "Grillzange", "Briketts", "Sonnenschirm", "Weihnachtsbaum")
+        assertGuess(GARTEN, "Tomatenerde", "Kräutererde", "Rosenerde", "Orchideenerde", "Orchideendünger")
         assertGuess(BLUMEN, "Blumen", "Rosen", "Tulpen", "Strauß Tulpen", "Sonnenblumen", "Lilien")
+        assertGuess(setOf(BLUMEN, GARTEN), "Orchidee", "Zimmerpflanze", "Topfpflanze", "Kaktus")
+        assertGuess(setOf(DEKO_WOHNEN, BLUMEN), "Adventskranz", "Türkranz")
+    }
+
+    @Test
+    fun diyStoreCleanersAreAlsoHousehold() {
+        assertGuess(
+            setOf(HAUSHALT_REINIGUNG, WERKZEUG),
+            "Spiritus", "Streusalz", "Rohrreiniger", "Abflussreiniger", "Besen", "Eimer", "Mausefalle",
+            "Terrassenreiniger", "Steinreiniger", "Fassadenreiniger", "Grünbelagentferner", "Schimmelentferner",
+            "Hochdruckreiniger",
+        )
+        assertGuess(HAUSHALT_REINIGUNG, "Klopapier", "Waschmittel", "Backpapier", "Spülmittel", "Müllbeutel")
+        assertGuess(GARTEN, "Laubbesen")
     }
 
     @Test
@@ -183,7 +236,19 @@ class AssortmentGuesserTest {
         assertGuess(SCHREIBWAREN, "Druckerpapier", "Tesafilm", "Schere", "Taschenrechner", "Schulranzen")
         assertGuess(BUECHER, "Buch", "Kochbuch", "Taschenbuch", "Krimi", "Reiseführer", "Landkarte")
         assertGuess(ZEITSCHRIFTEN_TABAK, "Zeitung", "Zeitschrift", "Rätselheft", "Zigaretten", "Tabak")
-        assertGuess(ZEITSCHRIFTEN_TABAK, "Blättchen", "Lotto", "Lottoschein", "Feuerzeug")
+        assertGuess(ZEITSCHRIFTEN_TABAK, "Blättchen", "Lotto", "Lottoschein", "Feuerzeug", "Lotto spielen", "Hörzu")
+        assertGuess(ZEITSCHRIFTEN_TABAK, "Kippen", "Marlboro", "Liquids", "Panini Sticker", "TV Spielfilm")
+        assertGuess(SCHREIBWAREN, "Tagebuch", "Gästebuch", "Fingerfarben", "Schultüte", "Vokabelheft", "Briefmarken")
+        assertGuess(MOEBEL, "Bücherregal", "Bierbank")
+    }
+
+    @Test
+    fun phoneCreditIsSoldAtKiosksAndElectronicsShops() {
+        assertGuess(
+            setOf(ZEITSCHRIFTEN_TABAK, ELEKTRONIK),
+            "Guthabenkarte", "Handyguthaben", "Handy Guthaben", "Prepaidkarte", "SIM-Karte", "SIM Karte", "Aldi Talk",
+            "Paysafecard",
+        )
     }
 
     @Test
@@ -247,7 +312,32 @@ class AssortmentGuesserTest {
         assertGuess(HAUSHALTSGERAETE, "Kühlschrank") // not "Schrank"
         assertGuess(SPORT, "Tischtennis") // not "Tisch"
         assertGuess(PARTY_GESCHENK, "Geburtstagskarte") // not "Karte" of a phone
-        assertGuess(ELEKTRONIK, "SIM-Karte", "SD-Karte") // not "Karte" for a birthday
+        assertGuess(setOf(ZEITSCHRIFTEN_TABAK, ELEKTRONIK), "SIM-Karte") // not "Karte" for a birthday
+        assertGuess(ELEKTRONIK, "SD-Karte")
+        assertGuess(SCHREIBWAREN, "Vokabelheft") // not "Kabel"
+        assertGuess(HAUSHALT_REINIGUNG, "Klammern", "Wäscheklammern") // not "Lamm"
+        assertGuess(SCHREIBWAREN, "Tackerklammern", "Heftklammern")
+        assertGuess(GARTEN, "Schneeschippe") // not "Hipp"
+        assertGuess(BABY, "Hippbrei")
+        assertGuess(KOSMETIK, "Beautyblender") // not "Lende"
+        assertGuess(FLEISCH_WURST, "Lenden", "Rinderlende")
+        assertGuess(VORRAT, "Tortelloni", "Muschelnudeln", "Hirschhornsalz") // not "Torte", "Muscheln", "Hirsch"
+        assertGuess(AUTO, "Bremsflüssigkeit", "Kühlerflüssigkeit", "Zündkerzen") // not "Essig", "Kerze"
+        assertGuess(GARTEN, "Anzündflüssigkeit")
+        assertGuess(SCHUHE, "Badeschlappen") // not "Lappen"
+        assertGuess(KLEIDUNG, "Radlerhose", "Reisetasche") // not "Radler", "Reis"
+        assertGuess(SCHREIBWAREN, "Reißverschluss")
+        assertGuess(GETRAENKE, "Spezi", "Spezis", "Paulaner Spezi", "Kinderpunsch", "Ginger Beer")
+        assertGuess(VORRAT, "Spezialmehl") // not "Spezi"
+        assertGuess(WERKZEUG, "Türklingel") // not "Klingel" of a bike
+        assertGuess(SPORT, "Zeltheringe") // not "Hering"
+        assertGuess(PARTY_GESCHENK, "Sparschwein", "Glücksschwein") // not "Schwein"
+        assertGuess(FAHRRAD, "Katzenauge") // not "Katze"
+        assertGuess(SUESSES_SNACKS, "Ü-Ei", "Ü-Eier", "Krabbenchips", "Gemüsechips", "Mikrowellenpopcorn")
+        assertGuess(SPIELZEUG, "Lego Duplo") // not "Duplo"
+        assertGuess(MILCH_EIER, "Pflanzenmilch", "Pflanzensahne") // not "Pflanze"
+        assertGuess(FISCH, "Fischfrikadellen")
+        assertGuess(SUESSES_SNACKS, "Süßigkeiten", "Süssigkeiten") // not "Essig"
     }
 
     @Test
@@ -256,6 +346,92 @@ class AssortmentGuesserTest {
         assertGuess(HAUSHALTSGERAETE, "Tiefkühltruhe", "Gefrierschrank")
         assertGuess(HAUSHALTSWAREN, "Pizzaschneider")
         assertGuess(HAUSHALT_REINIGUNG, "Tiefkühlbeutel", "Gefrierbeutel")
+        assertGuess(TIEFKUEHL, "TK Rotkohl", "TK-Rotkohl", "Rotkohl TK", "TK Pizza", "Erdbeer Eis", "Frozen Yogurt")
+        assertGuess(GETRAENKE, "Eis Tee")
+    }
+
+    @Test
+    fun keywordsThatNameTheFreezerMarkerWin() {
+        assertGuess(AUTO, "Eis-Kratzer", "Eis Kratzer")
+        assertGuess(HAUSHALTSGERAETE, "Tiefkühlschrank", "Eiswürfelmaschine", "Pizzaofen", "Eis Maschine")
+        assertGuess(HAUSHALTSWAREN, "Pizzastein", "Pizzablech", "Pizzateller", "Eiswürfelform", "Tiefkühldosen")
+        assertGuess(HAUSHALT_REINIGUNG, "Tiefkühltüten", "Eiswürfelbeutel")
+        assertGuess(VORRAT, "Langnese Honig", "Pizzasoße", "Pizzasauce")
+        assertGuess(SPIELZEUG, "Frozen Puppe", "Frozen Puzzle") // the film, not frozen food
+    }
+
+    @Test
+    fun healthProblemsAreNotFood() {
+        assertGuess(MEDIKAMENTE, "Fußpilz", "Fußpilzspray", "Nagelpilz", "Reisetabletten", "Antibabypille")
+        assertGuess(GESUNDHEIT, "Hühneraugen", "Hühneraugenpflaster", "Franzbranntwein", "Alkoholtupfer")
+        assertGuess(GESUNDHEIT, "Kochsalzlösung")
+        assertGuess(SPORT, "Medizinball")
+        assertGuess(HAUSHALTSWAREN, "Fleischthermometer", "Bratenthermometer", "Backofenthermometer")
+        assertGuess(GARTEN, "Grillthermometer")
+    }
+
+    @Test
+    fun kitchenwareAndAppliancesNamedAfterFoodAreNotFood() {
+        assertGuess(HAUSHALTSWAREN, "Wasserglas", "Wasserkaraffe", "Milchtopf", "Milchkännchen", "Eierschneider")
+        assertGuess(HAUSHALTSWAREN, "Käsehobel", "Tortenheber", "Kuchengitter", "Muffinblech", "Fleischklopfer")
+        assertGuess(HAUSHALTSWAREN, "Weinkühler", "Sektkühler", "Schnapsglas", "Proseccogläser", "Espressotassen")
+        assertGuess(HAUSHALTSWAREN, "Espressokocher", "Gemüsehobel", "Kartoffelstampfer", "Orangenpresse")
+        assertGuess(HAUSHALTSGERAETE, "Joghurtmaschine", "Popcornmaschine", "Nudelmaschine", "Brotschneidemaschine")
+        assertGuess(HAUSHALTSGERAETE, "Smoothie Maker", "Wassersprudler", "Milchschäumer", "Kontaktgrill")
+        assertGuess(HAUSHALTSGERAETE, "Tischgrill", "Kaffeepadmaschine", "Senseo Maschine")
+        assertGuess(HAUSHALT_REINIGUNG, "Kaffeemaschinenentkalker", "Wasserkocherentkalker", "Kühlschrankreiniger")
+        assertGuess(HAUSHALT_REINIGUNG, "Mikrowellenreiniger", "Waschmaschinentabs", "Topfbürste", "Toilettenbürste")
+    }
+
+    @Test
+    fun breadAndCakeWinOverTheirFilling() {
+        assertGuess(BROT_BACKWAREN, "Sonnenblumenbrot", "Kartoffelbrot", "Zwiebelbrot", "Walnussbrot", "Rosinenbrot")
+        assertGuess(BROT_BACKWAREN, "Erdbeerkuchen", "Erdbeertorte", "Pflaumenkuchen", "Zwiebelkuchen", "Apfeltasche")
+        assertGuess(BROT_BACKWAREN, "Quarktasche", "Zimtschnecke", "Puddingbrezel", "Cremeschnitte", "Christstollen")
+        assertGuess(PARTY_GESCHENK, "Tortendeko")
+        assertGuess(OBST_GEMUESE, "Rhabarber")
+        assertGuess(VORRAT, "Walnüsse", "Sonnenblumenkerne")
+    }
+
+    @Test
+    fun petProductsWinOverTheirLongerHead() {
+        assertGuess(TIER, "Hundegeschirr", "Katzengeschirr", "Hundekuchen", "Hundewurst", "Hundeschokolade")
+        assertGuess(TIER, "Hundebürste", "Futterschüssel", "Hundemantel", "Hundedecke", "Hundekissen")
+        assertGuess(TIER, "Katzenminze", "Mehlwürmer")
+    }
+
+    @Test
+    fun genericHeadsDoNotDecideEverydayNonFood() {
+        assertGuess(WERKZEUG, "Duschkabine", "Duschwand", "Duschstange", "Silikonkartusche", "Kartuschenpistole")
+        assertGuess(HEIMTEXTIL, "Duschmatte")
+        assertGuess(AUTO, "Felgenbürste")
+        assertGuess(ELEKTRONIK, "Druckerkartusche", "Tonerkartusche")
+        assertGuess(KOERPERPFLEGE, "Kulturbeutel", "Gesichtsreinigungsgel", "Körpermilch", "Sheabutter", "Bartfarbe")
+        assertGuess(KOSMETIK, "Nagelfarbe", "Make-up Schwamm")
+        assertGuess(SPORT, "Schlittschuhe", "Rollschuhe", "Boxhandschuhe", "Angelhaken", "Schwimmnudel")
+        assertGuess(GARTEN, "Grillhandschuh")
+        assertGuess(DEKO_WOHNEN, "Vanillekerze", "Erdbeerkerze", "Kühlschrankmagnet")
+        assertGuess(HAUSHALTSWAREN, "Gewürzregal")
+        assertGuess(KOERPERPFLEGE, "Duschgel")
+        assertGuess(BUECHER, "Kochbuch")
+    }
+
+    @Test
+    fun commonWordsBrandsAndTyposAreKnown() {
+        assertGuess(KOERPERPFLEGE, "Tempos", "Kleenex", "Q-Tips", "Ohrenstäbchen")
+        assertGuess(HAUSHALT_REINIGUNG, "Klorollen", "Küchentücher", "Spüli", "Hakle", "Raumspray", "Duftstäbchen")
+        assertGuess(MILCH_EIER, "Mozarella", "Yogurt", "Tofu", "Räuchertofu")
+        assertGuess(VORRAT, "Spagetti", "Götterspeise", "Seitan", "Falafel", "Ketschup")
+        assertGuess(OBST_GEMUESE, "Brokoli", "Zuccini", "Zuchini", "Datteln")
+        assertGuess(BROT_BACKWAREN, "Stollen", "Berliner")
+        assertGuess(SUESSES_SNACKS, "Überraschungsei", "Mon Cheri", "Merci", "Ferrero Rocher", "Lindt Hase")
+        assertGuess(GETRAENKE, "Pfand", "Pfandflaschen", "Leergut", "Mezzo Mix", "Fritz Kola", "Hohes C", "Volvic")
+        assertGuess(ALKOHOL, "Becks", "Krombacher", "Augustiner", "Riesling", "Grauburgunder", "Hugo")
+        assertGuess(BABY, "Pre Milch")
+        // Brands and words that must not take over other items.
+        assertGuess(BROT_BACKWAREN, "Weizen Wraps")
+        assertGuess(FLEISCH_WURST, "Burgunderschinken")
+        assertGuess(GETRAENKE, "Krombacher Fassbrause")
     }
 
     @Test

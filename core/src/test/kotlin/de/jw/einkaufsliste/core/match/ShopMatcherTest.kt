@@ -97,10 +97,76 @@ class ShopMatcherTest {
     @Test
     fun unclassifiedItemsMatchOnlyBroadShops() {
         val result = match(
-            listOf(shop("node/1", SUPERMARKET), shop("node/2", DEPARTMENT_STORE, northMeters = 300.0), shop("node/3", SHOES)),
+            listOf(
+                shop("node/1", SUPERMARKET),
+                shop("node/2", DEPARTMENT_STORE, northMeters = 300.0),
+                shop("node/3", SHOES),
+                shop("node/4", VARIETY_STORE, northMeters = 50.0),
+                shop("node/5", SUPERMARKET, northMeters = 20.0, name = "ALDI", brand = "Aldi Süd"),
+                shop("node/6", VARIETY_STORE, northMeters = 30.0, name = "TEDi", brand = "TEDi"),
+            ),
             listOf(item(1, "Irgendwas")),
         )
-        assertEquals(listOf("node/2"), result.map { it.shop.id })
+        assertEquals(listOf("node/1", "node/2"), result.map { it.shop.id })
+    }
+
+    @Test
+    fun unclassifiedItemsDoNotSendTheUserToVarietyStores() {
+        val dm = shop("node/1", CHEMIST, northMeters = 100.0, name = "dm-drogerie markt", brand = "dm")
+        val tedi = shop("node/2", VARIETY_STORE, northMeters = 200.0, name = "TEDi", brand = "TEDi")
+        val rewe = shop("node/3", SUPERMARKET, northMeters = 300.0, name = "REWE", brand = "REWE")
+        val items = listOf(
+            item(1, "Shampoo", Assortment.KOERPERPFLEGE),
+            item(2, "Deo", Assortment.KOERPERPFLEGE),
+            item(3, "Tempos"),
+            item(4, "Klorollen"),
+        )
+
+        val result = match(listOf(dm, tedi, rewe), items)
+
+        assertEquals(listOf("node/3", "node/1", "node/2"), result.map { it.shop.id })
+        assertEquals(listOf("Deo", "Klorollen", "Shampoo", "Tempos"), result[0].items.map { it.name })
+        assertEquals(listOf("Deo", "Shampoo"), result[2].items.map { it.name })
+        assertEquals(result[1].score, result[2].score, 1e-9)
+    }
+
+    @Test
+    fun theChainDecidesAssortmentBroadnessAndBonus() {
+        // An E-Center mapped with brand "Edeka" is the hypermarket; an Aldi is a discounter
+        // although shop=supermarket alone would be broad.
+        val eCenter = shop("node/1", SUPERMARKET, northMeters = 300.0, name = "E-Center", brand = "Edeka")
+        val aldi = shop("node/2", SUPERMARKET, northMeters = 100.0, name = "ALDI", brand = "Aldi Süd")
+        val items = listOf(item(1, "Bohrmaschine", Assortment.WERKZEUG), item(2, "Irgendwas"))
+
+        val result = match(listOf(eCenter, aldi), items)
+
+        assertEquals(listOf("node/1"), result.map { it.shop.id })
+        assertEquals(2.0 + ShopMatcher.CHAIN_BONUS, result.single().score, 1e-9)
+    }
+
+    @Test
+    fun baumarktMatchesBaumarktCleanersButNotEverydayCleaning() {
+        val obi = shop("node/1", DIY, name = "OBI", brand = "OBI")
+        val items = listOf(
+            item(1, "Klopapier", Assortment.HAUSHALT_REINIGUNG),
+            item(2, "Spiritus", Assortment.HAUSHALT_REINIGUNG, Assortment.WERKZEUG),
+        )
+        assertEquals(listOf("Spiritus"), match(listOf(obi), items).single().items.map { it.name })
+    }
+
+    @Test
+    fun phoneCreditIsFoundAtKiosksDiscountersAndPhoneShops() {
+        val result = match(
+            listOf(
+                shop("node/1", "shop=kiosk", northMeters = 100.0),
+                shop("node/2", SUPERMARKET, northMeters = 200.0, name = "Lidl", brand = "Lidl"),
+                shop("node/3", "shop=mobile_phone", northMeters = 300.0),
+                shop("node/4", SHOES, northMeters = 50.0),
+                shop("node/5", CHEMIST, northMeters = 60.0, name = "dm", brand = "dm"),
+            ),
+            listOf(item(1, "Handyguthaben", Assortment.ZEITSCHRIFTEN_TABAK, Assortment.ELEKTRONIK)),
+        )
+        assertEquals(setOf("node/1", "node/2", "node/3"), result.map { it.shop.id }.toSet())
     }
 
     @Test
@@ -312,6 +378,8 @@ class ShopMatcherTest {
         const val SHOES = "shop=shoes"
         const val PHARMACY = "amenity=pharmacy"
         const val DEPARTMENT_STORE = "shop=department_store"
+        const val VARIETY_STORE = "shop=variety_store"
+        const val DIY = "shop=doityourself"
         val MILCH_EIER = Assortment.MILCH_EIER
         val BROT_BACKWAREN = Assortment.BROT_BACKWAREN
     }

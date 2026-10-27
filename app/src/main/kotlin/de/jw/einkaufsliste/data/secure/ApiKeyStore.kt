@@ -1,6 +1,7 @@
 package de.jw.einkaufsliste.data.secure
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -18,7 +19,7 @@ import javax.crypto.spec.GCMParameterSpec
  * Android Keystore and never leaves it.
  */
 class ApiKeyStore(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("secure", Context.MODE_PRIVATE)
+    private val prefs = securePrefs(context)
     private val _hasKey = MutableStateFlow(prefs.contains(PREF_CIPHERTEXT))
 
     /** Whether a key is stored; the UI uses this to show or hide the photo option hint. */
@@ -74,11 +75,18 @@ class ApiKeyStore(context: Context) {
         return generator.generateKey()
     }
 
-    private companion object {
-        const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        const val KEY_ALIAS = "gemini_api_key"
-        const val TRANSFORMATION = "AES/GCM/NoPadding"
-        const val PREF_CIPHERTEXT = "gemini_key_ciphertext"
-        const val PREF_IV = "gemini_key_iv"
+    companion object {
+        private const val PREFS_NAME = "secure"
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "gemini_api_key"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val PREF_CIPHERTEXT = "gemini_key_ciphertext"
+        private const val PREF_IV = "gemini_key_iv"
+
+        /** Whether a key is stored, without an instance and without the Keystore (for the settings upgrade). */
+        fun hasStoredKey(context: Context): Boolean = securePrefs(context).contains(PREF_CIPHERTEXT)
+
+        private fun securePrefs(context: Context): SharedPreferences =
+            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 }

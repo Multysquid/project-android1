@@ -39,7 +39,7 @@ data class NearbyUiState(
     val progress: NearbyProgress? = null,
     /** The shopping list has no open items; nothing to look for, but the shops around are still loaded. */
     val listEmpty: Boolean = false,
-    /** With [listEmpty]: cached shops within the radius once loaded (for "Nur in diesem Laden"); else null. */
+    /** With [listEmpty]: cached shops within the radius once loaded (the screen shows how many); else null. */
     val shopsInRadius: Int? = null,
     /** The last attempt found no location. */
     val noLocation: Boolean = false,
@@ -146,8 +146,8 @@ class NearbyViewModel(private val container: AppContainer) : ViewModel() {
         val settingsRadius = container.settingsRepository.current().radiusMeters
         _state.update { it.copy(baseRadiusMeters = settingsRadius) }
 
-        // With an empty list nothing can match, but the shops are loaded anyway: pinning an item to a
-        // shop ("Nur in diesem Laden") picks from the cached ones.
+        // With an empty list nothing can match, but the shops are loaded anyway, so items added next
+        // can be looked for right away.
         val listEmpty = container.itemRepository.observeOpenCount().first() == 0
         _state.update { it.copy(listEmpty = listEmpty, shopsInRadius = null) }
 

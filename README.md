@@ -69,7 +69,7 @@ nutzen, die alte App deinstallieren, die neue installieren und die Liste wieder 
 | OpenStreetMap (Overpass-Server `overpass-api.de`, bei Störung ersatzweise `overpass.private.coffee`) | Läden in der Umgebung | Ein ungefährer Bereich: dein Standort auf etwa 100 m gerundet und der Umkreis |
 | Open Food Facts und Schwesterdatenbanken (Open Products/Beauty/Pet Food Facts) | Barcode → Produktname | Nur der Barcode |
 | Google Gemini (dein Schlüssel, nur bei „Foto“) | Foto → Name und Unterliste | Das Foto und die Namen deiner Unterlisten |
-| Google Gemini (dein Schlüssel, nur mit „Artikel mit Gemini einordnen“) | Artikel → Produktart, damit die App weiß, in welchen Läden es ihn gibt | Nur der Name eines neuen Artikels, einmal pro Name |
+| Google Gemini (dein Schlüssel, nur mit „Artikel mit Gemini einordnen“: standardmäßig an, aber aus, wenn du schon vor dieser Einstellung einen Schlüssel eingetragen hattest) | Artikel → Produktart, damit die App weiß, in welchen Läden es ihn gibt | Nur der Name eines neuen Artikels, einmal pro Name |
 | Google ML Kit (Barcode-Scanner) | Barcode lesen, auf dem Gerät | Keine Bilder; laut Google aber Nutzungs- und Leistungsdaten des Scanners (z. B. Gerätemodell, App-Version, Fehlercodes) |
 
 Alles andere (Liste, Einkaufsverlauf, Einstellungen) bleibt auf dem Gerät. Auch die

@@ -45,13 +45,16 @@ import java.util.Locale
 /**
  * A store chain that is common in Germany, with what it sells.
  *
- * [patterns] are matched as whole words against the shop's OSM `brand`, then its `name`,
+ * [patterns] are matched as whole words against the shop's OSM `brand` and its `name`,
  * both normalized like [StoreCatalog.normalize] ("dm" matches "dm-drogerie markt" but not
- * "Admiral"). A match counts only when the shop's tag is in [shopTags], so a bakery named
- * "Müller" is not the drugstore chain; an empty [shopTags] accepts any tag.
+ * "Admiral"); when both match, the chain listed first in [StoreCatalog.chains] wins, so an
+ * "E-Center" with brand "Edeka" is the E center. A match counts only when the shop's tag is
+ * in [shopTags], so a bakery named "Müller" is not the drugstore chain; an empty [shopTags]
+ * accepts any tag.
  *
- * [broad] marks stores that carry a bit of everything (hypermarkets, department and
- * variety stores); items the app cannot classify are looked for there.
+ * [broad] marks stores with a full range of groceries and everyday goods (full-range
+ * supermarkets, hypermarkets, department stores); items the app cannot classify are looked
+ * for there. Discounters and variety stores are not broad: their range is narrow.
  */
 data class StoreChain(
     val id: String,
@@ -77,13 +80,13 @@ object StoreCatalog {
         KOERPERPFLEGE, HAUSHALT_REINIGUNG, BABY, TIER, ELEKTRO_KLEINTEILE, ZEITSCHRIFTEN_TABAK, BLUMEN,
     )
 
-    /** Full-range supermarkets also keep plasters and vitamins, stationery, greeting cards and kitchen gadgets. */
-    private val SUPERMARKET = DISCOUNTER + setOf(GESUNDHEIT, SCHREIBWAREN, PARTY_GESCHENK, HAUSHALTSWAREN)
+    /** Full-range supermarkets also keep plasters and vitamins, stationery and greeting cards. */
+    private val SUPERMARKET = DISCOUNTER + setOf(GESUNDHEIT, SCHREIBWAREN, PARTY_GESCHENK)
 
-    /** Hypermarkets (SB-Warenhäuser) add a non-food department. */
+    /** Hypermarkets (SB-Warenhäuser) add a non-food department with kitchenware, tools and bike parts. */
     private val HYPERMARKET = SUPERMARKET + setOf(
-        KOSMETIK, DEKO_WOHNEN, HEIMTEXTIL, WERKZEUG, GARTEN, ELEKTRONIK, HAUSHALTSGERAETE,
-        BUECHER, KLEIDUNG, SPIELZEUG, SPORT, AUTO,
+        KOSMETIK, HAUSHALTSWAREN, DEKO_WOHNEN, HEIMTEXTIL, WERKZEUG, GARTEN, ELEKTRONIK, HAUSHALTSGERAETE,
+        BUECHER, KLEIDUNG, SPIELZEUG, SPORT, FAHRRAD, AUTO,
     )
     private val CONVENIENCE = setOf(
         OBST_GEMUESE, BROT_BACKWAREN, MILCH_EIER, FLEISCH_WURST, TIEFKUEHL, VORRAT, SUESSES_SNACKS,
@@ -100,14 +103,16 @@ object StoreCatalog {
     private val PRESS = setOf(ZEITSCHRIFTEN_TABAK, BUECHER, SUESSES_SNACKS, GETRAENKE)
     private val BEVERAGES = setOf(GETRAENKE, ALKOHOL)
 
-    /** dm, Rossmann: hygiene, cosmetics, cleaning, baby, health, an organic food shelf and small household goods. */
+    /** dm, Rossmann: hygiene, cosmetics, cleaning, baby, pet food, health and an organic food shelf. */
     private val DRUGSTORE = setOf(
         KOERPERPFLEGE, KOSMETIK, HAUSHALT_REINIGUNG, BABY, TIER, GESUNDHEIT, VORRAT, SUESSES_SNACKS,
-        GETRAENKE, KAFFEE_TEE, HAUSHALTSWAREN, ELEKTRO_KLEINTEILE, SCHREIBWAREN, PARTY_GESCHENK,
+        KAFFEE_TEE, ELEKTRO_KLEINTEILE, SCHREIBWAREN, PARTY_GESCHENK,
     )
     private val PHARMACY = setOf(MEDIKAMENTE, GESUNDHEIT, KOERPERPFLEGE, BABY)
+
+    /** Baumärkte have no everyday cleaning shelf; Spiritus or Rohrreiniger are guessed as [WERKZEUG] too. */
     private val DIY = setOf(
-        WERKZEUG, GARTEN, ELEKTRO_KLEINTEILE, HAUSHALT_REINIGUNG, HAUSHALTSWAREN, DEKO_WOHNEN, MOEBEL, AUTO,
+        WERKZEUG, GARTEN, ELEKTRO_KLEINTEILE, HAUSHALTSWAREN, DEKO_WOHNEN, MOEBEL, FAHRRAD, AUTO,
     )
     private val GARDEN_CENTRE = setOf(GARTEN, BLUMEN, DEKO_WOHNEN)
     private val ELECTRONICS = setOf(ELEKTRONIK, ELEKTRO_KLEINTEILE, HAUSHALTSGERAETE)
@@ -138,7 +143,7 @@ object StoreCatalog {
     private val HYPERMARKET_SHOPS = shops("supermarket", "hypermarket", "department_store")
     private val ORGANIC_SHOPS = shops("supermarket", "organic", "convenience", "health_food")
     private val DRUGSTORE_SHOPS = shops("chemist", "cosmetics")
-    private val MUELLER_SHOPS = shops("chemist", "cosmetics", "perfumery", "department_store", "variety_store")
+    private val MUELLER_SHOPS = shops("chemist", "cosmetics", "department_store")
     private val PERFUMERY_SHOPS = shops("perfumery", "cosmetics", "chemist")
     private val DIY_SHOPS = shops("doityourself", "hardware", "trade", "garden_centre")
     private val RAIFFEISEN_SHOPS = shops("doityourself", "agrarian", "garden_centre")
@@ -174,33 +179,34 @@ object StoreCatalog {
             "rewe_getraenkemarkt", "Rewe Getränkemarkt", BEVERAGE_SHOPS, BEVERAGES,
             "rewe getraenkemarkt", "rewe getraenke",
         ),
-        chain("rewe", "Rewe", GROCERY_SHOPS, SUPERMARKET, "rewe"),
+        chain("rewe", "Rewe", SUPERMARKET_SHOPS, SUPERMARKET, "rewe", broad = true),
         chain(
             "e_center", "E center", HYPERMARKET_SHOPS, HYPERMARKET,
             "e center", "ecenter", "edeka center", broad = true,
         ),
         chain(
             "edeka", "Edeka", GROCERY_SHOPS, SUPERMARKET,
-            "edeka", "e aktiv markt", "e neukauf", "nah gut", "nah und gut",
+            "edeka", "e aktiv markt", "e neukauf", "nah gut", "nah und gut", broad = true,
         ),
         chain("dm", "dm", DRUGSTORE_SHOPS, DRUGSTORE, "dm"),
         chain("rossmann", "Rossmann", DRUGSTORE_SHOPS, DRUGSTORE, "rossmann"),
         chain("netto", "Netto", GROCERY_SHOPS, DISCOUNTER, "netto"),
         chain("penny", "Penny", GROCERY_SHOPS, DISCOUNTER, "penny"),
         chain(
-            "mueller", "Müller", MUELLER_SHOPS, DRUGSTORE + setOf(SPIELZEUG, BUECHER, ELEKTRONIK, DEKO_WOHNEN),
+            "mueller", "Müller", MUELLER_SHOPS,
+            DRUGSTORE + setOf(SPIELZEUG, BUECHER, ELEKTRONIK, DEKO_WOHNEN, HAUSHALTSWAREN),
             "mueller",
         ),
         chain("douglas", "Douglas", PERFUMERY_SHOPS, setOf(KOSMETIK), "douglas"),
         chain("norma", "Norma", SUPERMARKET_SHOPS, DISCOUNTER, "norma"),
-        chain("tegut", "tegut", GROCERY_SHOPS, SUPERMARKET, "tegut"),
-        chain("hit", "Hit", SUPERMARKET_SHOPS, SUPERMARKET, "hit"),
-        chain("combi", "Combi", SUPERMARKET_SHOPS, SUPERMARKET, "combi"),
-        chain("markant", "Markant", SUPERMARKET_SHOPS, SUPERMARKET, "markant", "buenting"),
-        chain("wasgau", "Wasgau", GROCERY_SHOPS, SUPERMARKET, "wasgau"),
-        chain("feneberg", "Feneberg", GROCERY_SHOPS, SUPERMARKET, "feneberg"),
-        chain("nahkauf", "Nahkauf", GROCERY_SHOPS, SUPERMARKET, "nahkauf"),
-        chain("konsum", "Konsum", GROCERY_SHOPS, SUPERMARKET, "konsum"),
+        chain("tegut", "tegut", GROCERY_SHOPS, SUPERMARKET, "tegut", broad = true),
+        chain("hit", "Hit", SUPERMARKET_SHOPS, SUPERMARKET, "hit", broad = true),
+        chain("combi", "Combi", SUPERMARKET_SHOPS, SUPERMARKET, "combi", broad = true),
+        chain("markant", "Markant", SUPERMARKET_SHOPS, SUPERMARKET, "markant", "buenting", broad = true),
+        chain("wasgau", "Wasgau", GROCERY_SHOPS, SUPERMARKET, "wasgau", broad = true),
+        chain("feneberg", "Feneberg", GROCERY_SHOPS, SUPERMARKET, "feneberg", broad = true),
+        chain("nahkauf", "Nahkauf", GROCERY_SHOPS, SUPERMARKET, "nahkauf", broad = true),
+        chain("konsum", "Konsum", GROCERY_SHOPS, SUPERMARKET, "konsum", broad = true),
         chain("mix_markt", "Mix Markt", GROCERY_SHOPS, INTERNATIONAL_FOOD, "mix markt", "mixmarkt"),
         chain("alnatura", "Alnatura", ORGANIC_SHOPS, ORGANIC, "alnatura"),
         chain("denns", "denn's Biomarkt", ORGANIC_SHOPS, ORGANIC, "denns"),
@@ -210,11 +216,7 @@ object StoreCatalog {
         chain("budni", "Budni", DRUGSTORE_SHOPS, DRUGSTORE, "budni", "budnikowsky"),
 
         // Home and furniture
-        chain(
-            "ikea", "IKEA", FURNITURE_SHOPS,
-            FURNITURE + setOf(SPIELZEUG, PARTY_GESCHENK, VORRAT, SUESSES_SNACKS, TIEFKUEHL),
-            "ikea",
-        ),
+        chain("ikea", "IKEA", FURNITURE_SHOPS, FURNITURE + setOf(SPIELZEUG, PARTY_GESCHENK), "ikea"),
         chain("jysk", "JYSK", FURNITURE_SHOPS, FURNITURE, "jysk", "daenisches bettenlager"),
         chain("xxxlutz", "XXXLutz", FURNITURE_SHOPS, FURNITURE, "xxxlutz", "xxx lutz"),
         chain("hoeffner", "Höffner", FURNITURE_SHOPS, FURNITURE, "hoeffner"),
@@ -224,7 +226,7 @@ object StoreCatalog {
         chain("moebel_kraft", "Möbel Kraft", FURNITURE_SHOPS, FURNITURE, "moebel kraft"),
         chain("sconto", "Sconto", FURNITURE_SHOPS, FURNITURE, "sconto"),
         chain("moemax", "mömax", FURNITURE_SHOPS, FURNITURE, "moemax"),
-        chain("depot", "Depot", GIFT_SHOPS + FURNITURE_SHOPS, HOME_DECO + MOEBEL, "depot"),
+        chain("depot", "Depot", shops("interior_decoration", "gift", "houseware"), HOME_DECO + MOEBEL, "depot"),
         chain("butlers", "Butlers", GIFT_SHOPS + FURNITURE_SHOPS, HOME_DECO, "butlers"),
         chain(
             "zara_home", "Zara Home", FURNITURE_SHOPS + CLOTHES_SHOPS, setOf(HEIMTEXTIL, DEKO_WOHNEN, HAUSHALTSWAREN),
@@ -243,6 +245,10 @@ object StoreCatalog {
         chain("b1", "B1 Discount Baumarkt", DIY_SHOPS, DIY, "b1"),
         chain("herkules", "Herkules", DIY_SHOPS, DIY, "herkules"),
         chain(
+            "hammer", "Hammer", shops("doityourself", "interior_decoration", "flooring", "curtain", "paint"),
+            setOf(WERKZEUG, HEIMTEXTIL, DEKO_WOHNEN), "hammer",
+        ),
+        chain(
             "raiffeisen", "Raiffeisen-Markt", RAIFFEISEN_SHOPS, setOf(GARTEN, WERKZEUG, TIER, ELEKTRO_KLEINTEILE),
             "raiffeisen",
         ),
@@ -260,12 +266,15 @@ object StoreCatalog {
         chain("marktkauf", "Marktkauf", HYPERMARKET_SHOPS, HYPERMARKET, "marktkauf", broad = true),
         chain("famila", "Famila", HYPERMARKET_SHOPS, HYPERMARKET, "famila", broad = true),
         chain("v_markt", "V-Markt", HYPERMARKET_SHOPS, HYPERMARKET, "v markt", "vmarkt", broad = true),
-        chain("galeria", "Galeria", DEPARTMENT_SHOPS, DEPARTMENT, "galeria", "karstadt", "kaufhof", broad = true),
+        chain(
+            "galeria", "Galeria", shops("department_store"), DEPARTMENT,
+            "galeria", "karstadt", "kaufhof", broad = true,
+        ),
 
         // Electronics
         chain("mediamarkt", "MediaMarkt", ELECTRONICS_SHOPS, ELECTRONICS, "mediamarkt", "media markt"),
         chain("saturn", "Saturn", ELECTRONICS_SHOPS, ELECTRONICS, "saturn"),
-        chain("expert", "Expert", ELECTRONICS_SHOPS, ELECTRONICS, "expert"),
+        chain("expert", "Expert", shops("electronics", "appliance", "hifi"), ELECTRONICS, "expert"),
         chain("euronics", "Euronics", ELECTRONICS_SHOPS, ELECTRONICS, "euronics"),
         chain("medimax", "Medimax", ELECTRONICS_SHOPS, ELECTRONICS, "medimax"),
         chain("conrad", "Conrad", ELECTRONICS_SHOPS, setOf(ELEKTRONIK, ELEKTRO_KLEINTEILE, WERKZEUG), "conrad"),
@@ -299,37 +308,18 @@ object StoreCatalog {
             "kik",
         ),
         chain("nkd", "NKD", CLOTHES_SHOPS, FASHION_AND_HOME + SPIELZEUG, "nkd"),
+        chain(
+            "tk_maxx", "TK Maxx", DEPARTMENT_SHOPS,
+            FASHION + setOf(DEKO_WOHNEN, HEIMTEXTIL, HAUSHALTSWAREN, SPIELZEUG, KOSMETIK, PARTY_GESCHENK),
+            "tk maxx",
+        ),
         chain("decathlon", "Decathlon", SPORT_SHOPS, SPORTS + FAHRRAD, "decathlon"),
         chain("intersport", "Intersport", SPORT_SHOPS, SPORTS, "intersport"),
         chain("sportscheck", "SportScheck", SPORT_SHOPS, SPORTS, "sportscheck", "sport scheck"),
         chain("babyone", "BabyOne", BABY_SHOPS, BABY_STORE, "babyone", "baby one"),
         chain("baby_walz", "Baby-Walz", BABY_SHOPS, BABY_STORE, "baby walz", "babywalz"),
 
-        // Variety, discount and gift stores
-        chain(
-            "action", "Action", VARIETY_SHOPS, VARIETY + setOf(KOSMETIK, ELEKTRONIK, SPORT, AUTO, GETRAENKE),
-            "action", broad = true,
-        ),
-        chain("tedi", "TEDi", VARIETY_SHOPS, VARIETY + KOSMETIK, "tedi", broad = true),
-        chain(
-            "woolworth", "Woolworth", VARIETY_SHOPS, VARIETY + setOf(KOSMETIK, KLEIDUNG, ELEKTRONIK, SPORT, GETRAENKE),
-            "woolworth", "woolworths", broad = true,
-        ),
-        chain(
-            "thomas_philipps", "Thomas Philipps", VARIETY_SHOPS,
-            VARIETY + setOf(VORRAT, GETRAENKE, ALKOHOL, KAFFEE_TEE, MOEBEL, AUTO),
-            "thomas philipps", broad = true,
-        ),
-        chain(
-            "sonderpreis_baumarkt", "Sonderpreis Baumarkt", DIY_SHOPS + VARIETY_SHOPS, DIY + VARIETY + GETRAENKE,
-            "sonderpreis baumarkt", "sonderpreis", broad = true,
-        ),
-        chain("maec_geiz", "Mäc-Geiz", VARIETY_SHOPS, VARIETY + KOSMETIK, "maec geiz", "mac geiz", broad = true),
-        chain(
-            "pfennigpfeiffer", "Pfennigpfeiffer", VARIETY_SHOPS, VARIETY,
-            "pfennigpfeiffer", "pfennig pfeiffer", broad = true,
-        ),
-        chain("euroshop", "Euroshop", VARIETY_SHOPS, VARIETY, "euroshop", "euro shop", broad = true),
+        // Gift stores
         chain(
             "tiger", "Flying Tiger", GIFT_SHOPS, GIFTS + setOf(ELEKTRO_KLEINTEILE, SUESSES_SNACKS),
             "flying tiger", "tiger",
@@ -337,7 +327,7 @@ object StoreCatalog {
         chain("nanu_nana", "Nanu-Nana", GIFT_SHOPS, GIFTS, "nanu nana"),
 
         // Coffee, pet supplies, beverages, press
-        chain("tchibo", "Tchibo", COFFEE_SHOPS, setOf(KAFFEE_TEE, SUESSES_SNACKS, HAUSHALTSGERAETE), "tchibo"),
+        chain("tchibo", "Tchibo", COFFEE_SHOPS, setOf(KAFFEE_TEE, SUESSES_SNACKS), "tchibo"),
         chain("fressnapf", "Fressnapf", PET_SHOPS, setOf(TIER), "fressnapf", "maxi zoo"),
         chain("futterhaus", "Das Futterhaus", PET_SHOPS, setOf(TIER), "futterhaus"),
         chain("zoo_co", "Zoo & Co.", PET_SHOPS, setOf(TIER), "zoo co"),
@@ -349,6 +339,37 @@ object StoreCatalog {
         chain("presse_buch", "Presse + Buch", PRESS_SHOPS, PRESS + SCHREIBWAREN, "presse buch"),
         chain("k_kiosk", "k kiosk", PRESS_SHOPS, PRESS, "k kiosk"),
         chain("relay", "Relay", PRESS_SHOPS, PRESS, "relay"),
+
+        // Variety and discount stores (Sonderposten). They sell a bit of everything but are not broad,
+        // and come after the specialists so that "Wasser" names Getränke Hoffmann before Action.
+        chain(
+            "action", "Action", shops("variety_store", "department_store"),
+            VARIETY + setOf(KOSMETIK, ELEKTRONIK, SPORT, FAHRRAD, AUTO, GETRAENKE),
+            "action",
+        ),
+        chain("tedi", "TEDi", VARIETY_SHOPS, VARIETY + KOSMETIK, "tedi"),
+        chain("kodi", "KODi", VARIETY_SHOPS, VARIETY + setOf(GETRAENKE, KAFFEE_TEE), "kodi"),
+        chain(
+            "woolworth", "Woolworth", VARIETY_SHOPS, VARIETY + setOf(KOSMETIK, KLEIDUNG, ELEKTRONIK, SPORT, GETRAENKE),
+            "woolworth", "woolworths",
+        ),
+        chain(
+            "thomas_philipps", "Thomas Philipps", VARIETY_SHOPS,
+            VARIETY + setOf(VORRAT, GETRAENKE, ALKOHOL, KAFFEE_TEE, MOEBEL, AUTO),
+            "thomas philipps",
+        ),
+        chain(
+            "sonderpreis_baumarkt", "Sonderpreis Baumarkt", DIY_SHOPS + VARIETY_SHOPS, DIY + VARIETY + GETRAENKE,
+            "sonderpreis baumarkt", "sonderpreis",
+        ),
+        chain("maec_geiz", "Mäc-Geiz", VARIETY_SHOPS, VARIETY + KOSMETIK, "maec geiz", "mac geiz"),
+        chain("pfennigpfeiffer", "Pfennigpfeiffer", VARIETY_SHOPS, VARIETY, "pfennigpfeiffer", "pfennig pfeiffer"),
+        chain("euroshop", "Euroshop", VARIETY_SHOPS, VARIETY, "euroshop", "euro shop"),
+
+        // IKEA's Swedish food market where it is mapped as a shop of its own (the furniture store sells no food)
+        chain(
+            "ikea_food", "IKEA Schwedenshop", shops("convenience"), setOf(SUESSES_SNACKS, GETRAENKE, KAFFEE_TEE), "ikea",
+        ),
     )
 
     /** Assortments of shops that are not a known chain, by OSM tag (`shop=bakery`). */
@@ -400,8 +421,8 @@ object StoreCatalog {
         "shop=hifi" to setOf(ELEKTRONIK),
         "shop=video_games" to setOf(ELEKTRONIK),
         "shop=appliance" to setOf(HAUSHALTSGERAETE),
-        "shop=electrical" to setOf(ELEKTRO_KLEINTEILE),
-        "shop=lighting" to setOf(ELEKTRO_KLEINTEILE),
+        "shop=electrical" to setOf(ELEKTRO_KLEINTEILE, WERKZEUG),
+        "shop=lighting" to setOf(ELEKTRO_KLEINTEILE, DEKO_WOHNEN),
         "shop=stationery" to setOf(SCHREIBWAREN, PARTY_GESCHENK),
         "shop=books" to setOf(BUECHER),
         "shop=gift" to setOf(PARTY_GESCHENK, DEKO_WOHNEN),
@@ -433,12 +454,12 @@ object StoreCatalog {
         "shop=variety_store" to VARIETY,
     )
 
-    /** OSM tags of shops that carry a bit of everything (see [StoreChain.broad]). */
+    /** OSM tags of shops with a full range (see [StoreChain.broad]); a chain's own flag comes first. */
     val broadShopTags: Set<String> = setOf(
         "shop=department_store",
-        "shop=variety_store",
-        "shop=general",
         "shop=hypermarket",
+        "shop=general",
+        "shop=supermarket",
     )
 
     /** German labels for the tags in [byShopTag] that [CategoryCatalog.shopTagLabel] does not know. */
@@ -506,18 +527,32 @@ object StoreCatalog {
             .trim()
     }
 
-    /** The chain [shop] belongs to, or null. */
+    /**
+     * The chain [shop] belongs to, or null. Brand and name both count; when they name different
+     * chains, the one listed first in [chains] (the more specific one) wins.
+     */
     fun chainFor(shop: ShopInfo): StoreChain? {
         val tag = shop.tag.trim()
-        return chainIn(shop.brand, tag) ?: chainIn(shop.name, tag)
+        val byBrand = chainIndexIn(shop.brand, tag)
+        val byName = chainIndexIn(shop.name, tag)
+        val index = if (byBrand < 0 || byName < 0) maxOf(byBrand, byName) else minOf(byBrand, byName)
+        return chains.getOrNull(index)
     }
 
-    /** What [shop] sells: its chain's assortments, else those of its shop type, else nothing. */
-    fun assortmentsOf(shop: ShopInfo): Set<Assortment> =
-        chainFor(shop)?.assortments ?: byShopTag[shop.tag.trim()].orEmpty()
+    /**
+     * What [shop] sells: its chain's assortments, else those of its shop type, else nothing.
+     * [chain] is [chainFor] of [shop]; callers that already know it pass it in.
+     */
+    fun assortmentsOf(shop: ShopInfo, chain: StoreChain? = chainFor(shop)): Set<Assortment> =
+        chain?.assortments ?: byShopTag[shop.tag.trim()].orEmpty()
 
-    /** True when [shop] carries a bit of everything (chain marked [StoreChain.broad] or a broad shop type). */
-    fun isBroad(shop: ShopInfo): Boolean = chainFor(shop)?.broad ?: (shop.tag.trim() in broadShopTags)
+    /**
+     * True when items the app cannot classify are looked for at [shop]: its chain is
+     * [StoreChain.broad], or it is no known chain and has a tag in [broadShopTags].
+     * [chain] is [chainFor] of [shop]; callers that already know it pass it in.
+     */
+    fun isBroad(shop: ShopInfo, chain: StoreChain? = chainFor(shop)): Boolean =
+        chain?.broad ?: (shop.tag.trim() in broadShopTags)
 
     /**
      * Up to [limit] names of popular chains that sell any of [assortments], for "z. B. bei Lidl, dm".
@@ -594,8 +629,9 @@ object StoreCatalog {
         BLUMEN -> "shop=florist"
     }
 
-    private fun chainIn(text: String?, tag: String): StoreChain? {
-        if (text.isNullOrBlank()) return null
+    /** Index in [chains] of the first chain named in [text] that accepts [tag], or -1. */
+    private fun chainIndexIn(text: String?, tag: String): Int {
+        if (text.isNullOrBlank()) return -1
         val words = normalize(text).split(' ')
         var best = -1
         for (start in words.indices) {
@@ -608,7 +644,7 @@ object StoreCatalog {
                 }
             }
         }
-        return chains.getOrNull(best)
+        return best
     }
 
     private fun matchesAt(words: List<String>, start: Int, pattern: List<String>): Boolean =

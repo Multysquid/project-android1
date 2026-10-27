@@ -1,6 +1,7 @@
 package de.jw.einkaufsliste.data.settings
 
 import android.content.Context
+import androidx.datastore.core.DataMigration
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -14,11 +15,15 @@ import de.jw.einkaufsliste.core.gemini.GeminiApi
 import de.jw.einkaufsliste.core.model.GeoPoint
 import de.jw.einkaufsliste.core.model.QuietHours
 import de.jw.einkaufsliste.core.schedule.CheckSchedule
+import de.jw.einkaufsliste.data.secure.ApiKeyStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "settings",
+    produceMigrations = { context -> listOf(SettingsUpgradeMigration { ApiKeyStore.hasStoredKey(context) }) },
+)
 
 /** User settings. Defaults are the ones agreed in the plan. */
 data class AppSettings(
@@ -32,7 +37,10 @@ data class AppSettings(
     val respectOpeningHours: Boolean = true,
     val cooldownHours: Int = 3,
     val geminiModel: String = GeminiApi.DEFAULT_MODEL,
-    /** Ask Gemini what kind of product each new item is (only with an API key; see AssortmentService). */
+    /**
+     * Ask Gemini what kind of product each new item is (only with an API key); its answers count
+     * only while this is on. See AssortmentService.
+     */
     val classifyWithGemini: Boolean = true,
     val batterySetupDone: Boolean = false,
     /** The user hid the list's card that says the shop check is off. */
@@ -110,23 +118,62 @@ class SettingsRepository(context: Context) {
             hideCheckBanner = this[Keys.hideCheckBanner] ?: defaults.hideCheckBanner,
         )
     }
+}
 
-    private object Keys {
-        val checkEnabled = booleanPreferencesKey("check_enabled")
-        val radiusMeters = intPreferencesKey("radius_meters")
-        val intervalMinutes = intPreferencesKey("interval_minutes")
-        val quietHoursEnabled = booleanPreferencesKey("quiet_hours_enabled")
-        val quietStartMinute = intPreferencesKey("quiet_start_minute")
-        val quietEndMinute = intPreferencesKey("quiet_end_minute")
-        val respectOpeningHours = booleanPreferencesKey("respect_opening_hours")
-        val cooldownHours = intPreferencesKey("cooldown_hours")
-        val geminiModel = stringPreferencesKey("gemini_model")
-        val classifyWithGemini = booleanPreferencesKey("classify_with_gemini")
-        val batterySetupDone = booleanPreferencesKey("battery_setup_done")
-        val hideCheckBanner = booleanPreferencesKey("hide_check_banner")
-        val fetchLat = doublePreferencesKey("shop_fetch_lat")
-        val fetchLon = doublePreferencesKey("shop_fetch_lon")
-        val fetchRadius = intPreferencesKey("shop_fetch_radius")
-        val fetchAt = longPreferencesKey("shop_fetch_at")
+/**
+ * One-time upgrade of the settings an older version saved, run by DataStore before the first
+ * read and marked done in the store. That version saved every setting on each change, so most
+ * users have its default radius of 500 m stored: it becomes the new default. Users who already
+ * had a Gemini key were told that only photos go to Gemini, so "Artikel mit Gemini einordnen"
+ * starts off for them. [hasStoredGeminiKey] says whether a key is stored.
+ */
+internal class SettingsUpgradeMigration(private val hasStoredGeminiKey: () -> Boolean) : DataMigration<Preferences> {
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean = currentData[Keys.upgradeV2Done] != true
+
+    override suspend fun migrate(currentData: Preferences): Preferences {
+        val prefs = currentData.toMutablePreferences()
+        upgradedRadius(prefs[Keys.radiusMeters])?.let { prefs[Keys.radiusMeters] = it }
+        upgradedClassifyWithGemini(prefs[Keys.classifyWithGemini], hasStoredGeminiKey())?.let {
+            prefs[Keys.classifyWithGemini] = it
+        }
+        prefs[Keys.upgradeV2Done] = true
+        return prefs
     }
+
+    override suspend fun cleanUp() = Unit
+
+    companion object {
+        /** The default radius before the upgrade. */
+        const val OLD_DEFAULT_RADIUS_METERS = 500
+
+        /** The radius to store instead of the [stored] one, or null to keep it. */
+        fun upgradedRadius(stored: Int?): Int? =
+            if (stored == OLD_DEFAULT_RADIUS_METERS) AppSettings.DEFAULT_RADIUS_METERS else null
+
+        /** The value to store for "Artikel mit Gemini einordnen" instead of the [stored] one, or null to keep it. */
+        fun upgradedClassifyWithGemini(stored: Boolean?, hasStoredKey: Boolean): Boolean? =
+            if (stored == null && hasStoredKey) false else null
+    }
+}
+
+private object Keys {
+    val checkEnabled = booleanPreferencesKey("check_enabled")
+    val radiusMeters = intPreferencesKey("radius_meters")
+    val intervalMinutes = intPreferencesKey("interval_minutes")
+    val quietHoursEnabled = booleanPreferencesKey("quiet_hours_enabled")
+    val quietStartMinute = intPreferencesKey("quiet_start_minute")
+    val quietEndMinute = intPreferencesKey("quiet_end_minute")
+    val respectOpeningHours = booleanPreferencesKey("respect_opening_hours")
+    val cooldownHours = intPreferencesKey("cooldown_hours")
+    val geminiModel = stringPreferencesKey("gemini_model")
+    val classifyWithGemini = booleanPreferencesKey("classify_with_gemini")
+    val batterySetupDone = booleanPreferencesKey("battery_setup_done")
+    val hideCheckBanner = booleanPreferencesKey("hide_check_banner")
+    val fetchLat = doublePreferencesKey("shop_fetch_lat")
+    val fetchLon = doublePreferencesKey("shop_fetch_lon")
+    val fetchRadius = intPreferencesKey("shop_fetch_radius")
+    val fetchAt = longPreferencesKey("shop_fetch_at")
+
+    /** [SettingsUpgradeMigration] ran. */
+    val upgradeV2Done = booleanPreferencesKey("upgrade_v2_done")
 }

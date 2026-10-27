@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 /** Sentinel for "the new-category dialog is open" in the saveable dialog state. */
 private const val NEW_CATEGORY = 0L
 
-/** "Unterlisten bearbeiten": order, names, emoji and shop types of the categories. */
+/** "Unterlisten bearbeiten": order, names and emoji of the categories. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoriesScreen(container: AppContainer, onBack: () -> Unit) {

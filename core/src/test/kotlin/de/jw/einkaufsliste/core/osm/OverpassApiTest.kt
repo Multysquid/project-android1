@@ -128,6 +128,14 @@ class OverpassApiTest {
     }
 
     @Test
+    fun pharmacyWithShopTagCountsAsPharmacy() {
+        val json = """
+            {"elements":[{"type":"node","id":1,"lat":50.0,"lon":8.0,"tags":{"shop":"chemist","amenity":"pharmacy"}}]}
+        """.trimIndent()
+        assertEquals("amenity=pharmacy", OverpassApi.parse(json).single().tag)
+    }
+
+    @Test
     fun acceptsIdAndCoordinatesAsStrings() {
         val json = """
             {"elements":[{"type":"node","id":"17","lat":"50.5","lon":"8.25","tags":{"shop":"kiosk"}}]}

@@ -68,16 +68,19 @@ object GeminiApi {
         Assortment.HAUSHALTSWAREN to "Töpfe, Pfannen, Geschirr, Besteck, Küchenhelfer, Vorratsdosen",
         Assortment.DEKO_WOHNEN to "Kerzen, Bilderrahmen, Vasen, Kissen, Dekoration",
         Assortment.HEIMTEXTIL to "Bettwäsche, Handtücher, Vorhänge, Decken",
-        Assortment.WERKZEUG to "Werkzeug, Schrauben, Kleber, Farbe, Bau- und Reparaturmaterial",
+        Assortment.WERKZEUG to "Werkzeug, Schrauben, Kleber, Farbe, Bau- und Reparaturmaterial, Verlängerungskabel, " +
+            "Steckdosenleisten, Zeitschaltuhren",
         Assortment.GARTEN to "Pflanzen, Samen, Blumenerde, Gartengeräte, Grill und Grillkohle",
-        Assortment.ELEKTRO_KLEINTEILE to "Batterien, Glühbirnen, Kabel, Verlängerungskabel, Steckdosen",
+        Assortment.ELEKTRO_KLEINTEILE to "Batterien, Knopfzellen, Glühbirnen, Leuchtmittel, Lichterketten, " +
+            "einfache Kabel",
         Assortment.ELEKTRONIK to "Geräte und Zubehör: Kopfhörer, Ladegeräte, Handyhüllen, USB-Sticks, " +
             "Druckerpatronen, Fernseher, Computer",
         Assortment.HAUSHALTSGERAETE to "Wasserkocher, Staubsauger, Föhn, Kaffeemaschine, Waschmaschine",
         Assortment.SCHREIBWAREN to "Stifte, Papier, Hefte, Briefumschläge, Bürobedarf",
-        Assortment.ZEITSCHRIFTEN_TABAK to "Zeitungen, Zeitschriften, Zigaretten, Tabak, Lotto",
+        Assortment.ZEITSCHRIFTEN_TABAK to "Zeitungen, Zeitschriften, Zigaretten, Tabak, Lotto, Handyguthaben, " +
+            "Prepaid-Karten",
         Assortment.PARTY_GESCHENK to "Geschenkpapier, Grußkarten, Luftballons, Partyartikel, kleine Geschenke",
-        Assortment.BLUMEN to "Schnittblumen und Sträuße",
+        Assortment.BLUMEN to "Schnittblumen, Sträuße, Topfblumen wie Orchideen",
     )
 
     private val json = Json {
@@ -203,7 +206,8 @@ object GeminiApi {
         }
         lines += "Wähle nur Sortimente, in denen man den Artikel wirklich kaufen würde, nicht alle, die irgendwie passen."
         lines += "Beispiele: \"Vollmilch\" -> [\"milch_eier\"], \"Ibuprofen\" -> [\"medikamente\"], " +
-            "\"Pflaster\" -> [\"gesundheit\"], \"Ladekabel\" -> [\"elektronik\", \"elektro_kleinteile\"]."
+            "\"Pflaster\" -> [\"gesundheit\"], \"Ladekabel\" -> [\"elektronik\", \"elektro_kleinteile\"], " +
+            "\"Verlängerungskabel\" -> [\"werkzeug\"], \"Handyguthaben\" -> [\"zeitschriften_tabak\", \"elektronik\"]."
         lines += "Wenn der Text kein Produkt ist, das man kaufen kann, antworte mit einer leeren Liste."
         return lines.joinToString("\n")
     }

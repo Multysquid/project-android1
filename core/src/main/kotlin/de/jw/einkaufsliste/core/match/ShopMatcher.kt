@@ -81,8 +81,9 @@ object ShopMatcher {
         candidates: List<Candidate>,
         itemOrder: Comparator<ItemInfo>,
     ): ShopMatch? {
-        val sells: Set<Assortment> = StoreCatalog.assortmentsOf(shop)
-        val broad = StoreCatalog.isBroad(shop)
+        val chain = StoreCatalog.chainFor(shop)
+        val sells: Set<Assortment> = StoreCatalog.assortmentsOf(shop, chain)
+        val broad = StoreCatalog.isBroad(shop, chain)
         val matched = ArrayList<ItemInfo>()
         val learned = HashSet<Long>()
         for (candidate in candidates) {
@@ -95,7 +96,7 @@ object ShopMatcher {
             }
         }
         if (matched.isEmpty()) return null
-        val chainBonus = if (StoreCatalog.chainFor(shop) != null) CHAIN_BONUS else 0.0
+        val chainBonus = if (chain != null) CHAIN_BONUS else 0.0
         return ShopMatch(
             shop = shop,
             distanceMeters = distance,

@@ -48,11 +48,25 @@ class StoreCatalogTest {
     }
 
     @Test
-    fun brandWinsOverName() {
-        assertEquals("lidl", chainId("shop=supermarket", name = "Rewe", brand = "Lidl"))
+    fun brandOrNameNamesTheChain() {
+        assertEquals("lidl", chainId("shop=supermarket", brand = "Lidl"))
         assertEquals("lidl", chainId("shop=supermarket", name = "Lidl"))
         assertEquals("lidl", chainId("shop=supermarket", name = "Lidl Filiale", brand = "Unbekannt GmbH"))
         assertEquals("rewe", chainId("shop=supermarket", name = "REWE Markt Schmidt oHG", brand = ""))
+    }
+
+    @Test
+    fun whenBrandAndNameDisagreeTheChainListedFirstWins() {
+        // The name-suggestion-index maps E-Centers as name "E-Center", brand "Edeka".
+        assertEquals("e_center", chainId("shop=supermarket", name = "E-Center", brand = "Edeka"))
+        assertEquals("e_center", chainId("shop=hypermarket", name = "E-Center", brand = "Edeka"))
+        assertEquals("e_center", chainId("shop=supermarket", name = "Edeka", brand = "E center"))
+        assertEquals("lidl", chainId("shop=supermarket", name = "Rewe", brand = "Lidl"))
+        assertEquals("lidl", chainId("shop=supermarket", name = "Lidl", brand = "Rewe"))
+
+        val eCenter = shop("shop=supermarket", name = "E-Center", brand = "Edeka")
+        assertTrue(Assortment.WERKZEUG in StoreCatalog.assortmentsOf(eCenter))
+        assertTrue(StoreCatalog.isBroad(eCenter))
     }
 
     @Test
@@ -77,6 +91,8 @@ class StoreCatalogTest {
         assertEquals("mueller", chainId("shop=chemist", name = "Müller Drogerie"))
         assertEquals("mueller", chainId("shop=department_store", name = "Müller"))
         assertNull(chainId("shop=bakery", name = "Bäckerei Müller"))
+        assertNull(chainId("shop=perfumery", name = "Parfümerie Müller"))
+        assertNull(chainId("shop=variety_store", name = "Müller Sonderposten"))
         assertNull(chainId("shop=butcher", name = "Fleischerei Müller"))
         assertNull(chainId("shop=electronics", name = "Elektro Müller"))
         assertEquals(setOf(Assortment.BROT_BACKWAREN), StoreCatalog.assortmentsOf(shop("shop=bakery", "Bäckerei Müller")))
@@ -90,14 +106,25 @@ class StoreCatalogTest {
         assertEquals("netto", chainId("shop=supermarket", brand = "Netto Marken-Discount"))
         assertEquals("netto", chainId("shop=supermarket", brand = "Netto"))
         assertEquals("rewe", chainId("shop=supermarket", name = "REWE City"))
-        assertEquals("rewe", chainId("shop=convenience", name = "REWE To Go"))
         assertEquals("rewe_getraenkemarkt", chainId("shop=beverages", name = "REWE Getränkemarkt"))
         assertEquals("e_center", chainId("shop=supermarket", name = "E-Center"))
         assertEquals("e_center", chainId("shop=supermarket", brand = "EDEKA Center"))
+        assertEquals("e_center", chainId("shop=supermarket", name = "E-Center", brand = "Edeka"))
         assertEquals("edeka", chainId("shop=supermarket", name = "EDEKA Xpress"))
         assertEquals("edeka", chainId("shop=supermarket", name = "Nah & Gut Weber"))
         assertEquals("penny", chainId("shop=supermarket", name = "PENNY Markt"))
         assertEquals("kaufland", chainId("shop=supermarket", brand = "Kaufland"))
+    }
+
+    @Test
+    fun reweToGoKiosksAreNotRewe() {
+        // Petrol-station kiosks mapped as brand "REWE To Go", shop=convenience
+        assertNull(chainId("shop=convenience", name = "REWE To Go", brand = "REWE To Go"))
+        val kiosk = StoreCatalog.assortmentsOf(shop("shop=convenience", name = "REWE To Go", brand = "REWE To Go"))
+        assertTrue(Assortment.GETRAENKE in kiosk)
+        for (assortment in listOf(Assortment.BABY, Assortment.TIER, Assortment.FISCH, Assortment.PARTY_GESCHENK)) {
+            assertFalse(assortment.name, assortment in kiosk)
+        }
     }
 
     @Test
@@ -126,6 +153,43 @@ class StoreCatalogTest {
     }
 
     @Test
+    fun chainsWithUnexpectedShopTypes() {
+        val kodi = shop("shop=houseware", brand = "KODi")
+        assertEquals("kodi", StoreCatalog.chainFor(kodi)?.id)
+        for (assortment in listOf(Assortment.HAUSHALT_REINIGUNG, Assortment.KOERPERPFLEGE, Assortment.TIER)) {
+            assertTrue(assortment.name, assortment in StoreCatalog.assortmentsOf(kodi))
+        }
+        assertFalse(StoreCatalog.isBroad(kodi))
+
+        val hammer = shop("shop=doityourself", brand = "Hammer")
+        assertEquals("hammer", StoreCatalog.chainFor(hammer)?.id)
+        assertTrue(Assortment.HEIMTEXTIL in StoreCatalog.assortmentsOf(hammer))
+        assertFalse(Assortment.GARTEN in StoreCatalog.assortmentsOf(hammer))
+        assertFalse(Assortment.AUTO in StoreCatalog.assortmentsOf(hammer))
+
+        val tkMaxx = shop("shop=department_store", name = "TK Maxx", brand = "TK Maxx")
+        assertEquals("tk_maxx", StoreCatalog.chainFor(tkMaxx)?.id)
+        assertTrue(Assortment.KLEIDUNG in StoreCatalog.assortmentsOf(tkMaxx))
+        assertFalse(Assortment.ELEKTRONIK in StoreCatalog.assortmentsOf(tkMaxx))
+        assertFalse(StoreCatalog.isBroad(tkMaxx))
+    }
+
+    @Test
+    fun ikeaSellsNoGroceriesOnlyItsFoodMarketSellsSweets() {
+        val ikea = StoreCatalog.assortmentsOf(shop("shop=furniture", brand = "IKEA"))
+        assertTrue(Assortment.MOEBEL in ikea)
+        for (assortment in listOf(Assortment.TIEFKUEHL, Assortment.VORRAT, Assortment.SUESSES_SNACKS)) {
+            assertFalse(assortment.name, assortment in ikea)
+        }
+        val foodMarket = shop("shop=convenience", name = "IKEA Swedish Food Market", brand = "IKEA")
+        assertEquals("ikea_food", StoreCatalog.chainFor(foodMarket)?.id)
+        assertTrue(Assortment.SUESSES_SNACKS in StoreCatalog.assortmentsOf(foodMarket))
+        assertFalse(Assortment.TIEFKUEHL in StoreCatalog.assortmentsOf(foodMarket))
+        assertFalse(Assortment.ZEITSCHRIFTEN_TABAK in StoreCatalog.assortmentsOf(foodMarket))
+        assertFalse("IKEA" in StoreCatalog.exampleChains(setOf(Assortment.TIEFKUEHL)))
+    }
+
+    @Test
     fun shortCommonNamesNeedTheRightShopType() {
         assertEquals("hit", chainId("shop=supermarket", name = "HIT"))
         assertNull(chainId("shop=clothes", name = "Hit"))
@@ -133,6 +197,14 @@ class StoreCatalogTest {
         assertNull(chainId("shop=sports", name = "Action Sports"))
         assertEquals("expert", chainId("shop=electronics", brand = "expert"))
         assertNull(chainId("shop=bicycle", name = "Fahrrad Expert"))
+        assertNull(chainId("shop=mobile_phone", name = "Handy Expert"))
+        assertNull(chainId("shop=computer", name = "PC Expert"))
+        assertEquals("depot", chainId("shop=interior_decoration", brand = "Depot"))
+        assertNull(chainId("shop=furniture", name = "Möbel Depot"))
+        assertNull(chainId("shop=bed", name = "Matratzen-Depot"))
+        assertEquals("galeria", chainId("shop=department_store", brand = "Galeria"))
+        assertNull(chainId("shop=clothes", name = "Galeria Moda"))
+        assertNull(chainId("shop=gift", name = "Fun & Action"))
         assertEquals("combi", chainId("shop=supermarket", name = "Combi"))
         assertNull(chainId("shop=bakery", name = "Combi Backshop"))
         assertEquals("netto", chainId("shop=supermarket", name = "Netto"))
@@ -152,6 +224,7 @@ class StoreCatalogTest {
 
     @Test
     fun chainAssortmentsComeBeforeTheShopType() {
+        // A discounter is not broad, although shop=supermarket alone would be.
         val lidl = shop("shop=supermarket", brand = "Lidl")
         assertTrue(Assortment.OBST_GEMUESE in StoreCatalog.assortmentsOf(lidl))
         assertTrue(Assortment.ELEKTRO_KLEINTEILE in StoreCatalog.assortmentsOf(lidl))
@@ -176,10 +249,119 @@ class StoreCatalogTest {
         assertEquals(setOf(Assortment.FLEISCH_WURST), StoreCatalog.assortmentsOf(shop("shop=butcher", "Metzgerei Huber")))
         val supermarket = shop("shop=supermarket", "Dorfladen Meier")
         assertTrue(Assortment.MILCH_EIER in StoreCatalog.assortmentsOf(supermarket))
-        assertFalse(StoreCatalog.isBroad(supermarket))
+        assertTrue(StoreCatalog.isBroad(supermarket))
+        assertTrue(StoreCatalog.isBroad(shop("shop=hypermarket", "Verbrauchermarkt Schulze")))
         assertTrue(StoreCatalog.isBroad(shop("shop=department_store", "Kaufhaus Stolz")))
-        assertTrue(StoreCatalog.isBroad(shop("shop=variety_store", "Sonderposten Schulz")))
         assertTrue(StoreCatalog.isBroad(shop(" shop=general ", "Dorfladen")))
+        assertFalse(StoreCatalog.isBroad(shop("shop=variety_store", "Sonderposten Schulz")))
+        assertFalse(StoreCatalog.isBroad(shop("shop=convenience", "Späti")))
+    }
+
+    @Test
+    fun fullRangeStoresAreBroadDiscountersAndVarietyStoresAreNot() {
+        val broad = StoreCatalog.chains.filter { it.broad }.map { it.id }.toSet()
+        assertEquals(
+            setOf(
+                "rewe", "e_center", "edeka", "tegut", "hit", "combi", "markant", "wasgau", "feneberg", "nahkauf",
+                "konsum", "kaufland", "globus", "marktkauf", "famila", "v_markt", "galeria",
+            ),
+            broad,
+        )
+        assertTrue(StoreCatalog.isBroad(shop("shop=supermarket", brand = "REWE")))
+        assertFalse(StoreCatalog.isBroad(shop("shop=supermarket", brand = "Aldi Süd")))
+        assertFalse(StoreCatalog.isBroad(shop("shop=variety_store", brand = "TEDi")))
+        assertFalse(StoreCatalog.isBroad(shop("shop=variety_store", brand = "Action")))
+    }
+
+    @Test
+    fun passingTheKnownChainGivesTheSameAnswer() {
+        val shops = listOf(
+            shop("shop=supermarket", brand = "Lidl"),
+            shop("shop=supermarket", "Dorfladen Meier"),
+            shop("shop=department_store", brand = "Müller"),
+            shop("shop=variety_store", "Sonderposten Schulz"),
+            shop("shop=hairdresser", "Salon Norma"),
+        )
+        for (shop in shops) {
+            val chain = StoreCatalog.chainFor(shop)
+            assertEquals(shop.toString(), StoreCatalog.assortmentsOf(shop), StoreCatalog.assortmentsOf(shop, chain))
+            assertEquals(shop.toString(), StoreCatalog.isBroad(shop), StoreCatalog.isBroad(shop, chain))
+        }
+    }
+
+    @Test
+    fun baumaerkteSellNoEverydayCleaning() {
+        for (shop in listOf(shop("shop=doityourself", brand = "OBI"), shop("shop=doityourself", "Baumarkt Krause"))) {
+            val sells = StoreCatalog.assortmentsOf(shop)
+            assertFalse(shop.toString(), Assortment.HAUSHALT_REINIGUNG in sells)
+            assertTrue(shop.toString(), Assortment.WERKZEUG in sells)
+        }
+    }
+
+    @Test
+    fun kitchenwareOnlyAtHypermarketsMuellerAndHomeStores() {
+        val nonSellers = listOf(
+            shop("shop=supermarket", brand = "Rewe"),
+            shop("shop=supermarket", brand = "Edeka"),
+            shop("shop=supermarket", brand = "Aldi"),
+            shop("shop=supermarket", "Dorfladen Meier"),
+            shop("shop=chemist", brand = "dm"),
+            shop("shop=chemist", brand = "Rossmann"),
+            shop("shop=chemist", "Drogerie Weber"),
+        )
+        for (shop in nonSellers) assertFalse(shop.toString(), Assortment.HAUSHALTSWAREN in StoreCatalog.assortmentsOf(shop))
+        val sellers = listOf(
+            shop("shop=supermarket", brand = "Kaufland"),
+            shop("shop=supermarket", name = "E-Center", brand = "Edeka"),
+            shop("shop=hypermarket", "Verbrauchermarkt Schulze"),
+            shop("shop=chemist", brand = "Müller"),
+            shop("shop=furniture", brand = "IKEA"),
+            shop("shop=variety_store", brand = "TEDi"),
+        )
+        for (shop in sellers) assertTrue(shop.toString(), Assortment.HAUSHALTSWAREN in StoreCatalog.assortmentsOf(shop))
+        val examples = StoreCatalog.exampleChains(setOf(Assortment.HAUSHALTSWAREN))
+        assertEquals(listOf("Müller", "IKEA", "JYSK", "Depot"), examples)
+    }
+
+    @Test
+    fun drugstoresSellNoDrinks() {
+        for (shop in listOf(shop("shop=chemist", brand = "dm"), shop("shop=chemist", "Drogerie Weber"))) {
+            assertFalse(shop.toString(), Assortment.GETRAENKE in StoreCatalog.assortmentsOf(shop))
+        }
+        assertEquals(
+            listOf("Aldi", "Lidl", "Rewe Getränkemarkt", "Getränke Hoffmann"),
+            StoreCatalog.exampleChains(setOf(Assortment.GETRAENKE)),
+        )
+    }
+
+    @Test
+    fun specialistShopTypesSellWhatTheirNameSays() {
+        // Extension leads and sockets are WERKZEUG; lamps are DEKO_WOHNEN.
+        val electrical = StoreCatalog.assortmentsOf(shop("shop=electrical", "Elektro Schmitt"))
+        assertEquals(setOf(Assortment.ELEKTRO_KLEINTEILE, Assortment.WERKZEUG), electrical)
+        val lighting = StoreCatalog.assortmentsOf(shop("shop=lighting", "Lampenwelt"))
+        assertEquals(setOf(Assortment.ELEKTRO_KLEINTEILE, Assortment.DEKO_WOHNEN), lighting)
+    }
+
+    @Test
+    fun tchiboIsNoApplianceStore() {
+        assertFalse(Assortment.HAUSHALTSGERAETE in StoreCatalog.assortmentsOf(shop("shop=coffee", brand = "Tchibo")))
+        assertFalse("Tchibo" in StoreCatalog.exampleChains(setOf(Assortment.HAUSHALTSGERAETE)))
+    }
+
+    @Test
+    fun bikePartsAtBaumaerkteHypermarketsAndAction() {
+        for (shop in listOf(
+            shop("shop=doityourself", brand = "OBI"),
+            shop("shop=supermarket", brand = "Kaufland"),
+            shop("shop=variety_store", brand = "Action"),
+            shop("shop=bicycle", "Radhaus"),
+        )) {
+            assertTrue(shop.toString(), Assortment.FAHRRAD in StoreCatalog.assortmentsOf(shop))
+        }
+        val examples = StoreCatalog.exampleChains(setOf(Assortment.FAHRRAD))
+        assertEquals("OBI", examples.first())
+        assertTrue(examples.toString(), "Decathlon" in examples)
     }
 
     @Test
@@ -237,6 +419,7 @@ class StoreCatalogTest {
         val examples = StoreCatalog.exampleChains(emptySet())
         assertEquals(4, examples.size)
         for (name in examples) assertTrue(name, chainNamed(name).broad)
+        assertEquals(listOf("Rewe", "E center", "Edeka"), StoreCatalog.exampleChains(emptySet(), limit = 3))
     }
 
     @Test

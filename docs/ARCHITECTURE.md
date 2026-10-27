@@ -121,21 +121,31 @@ finer than the Unterlisten):
 
 1. Each item gets its assortments from `AssortmentService.resolve`: Gemini's cached
    answer for the normalized name if there is one, else `AssortmentGuesser.guess` (German
-   keyword tables, longest keyword wins, falling back to the item's Unterliste). Gemini
+   keyword tables, longest keyword wins, falling back to the item's Unterliste). In a name
+   with "für"/"fürs", "zum", "zur" or "gegen" the part after it decides when it names pet,
+   bicycle, car or household-cleaning products ("Shampoo für den Hund"), else the part
+   before it ("Batterien für die Fernbedienung"). Gemini
    (`GeminiApi.buildAssortmentRequest`, only the name is sent) is asked once per name when
-   the item is added or edited and, for items added offline or before a key was saved,
-   at the start of each check (at most 5 per check). Setting "Artikel mit Gemini
-   einordnen", on by default, needs a key. Answers are re-asked after 180 days.
+   the item is added or edited and, for items added offline, by a backup import or before
+   a key was saved, at the end of each check (at most 5 per check, see below). Setting
+   "Artikel mit Gemini einordnen", on by default, needs a key; while it is off, the cached
+   answers are ignored and the keyword tables decide. Answers are re-asked after 180 days.
 2. Each shop gets its assortments from `StoreCatalog.assortmentsOf`: about 100 German
    chains by `brand`, then `name` (whole words, restricted to fitting OSM tags so a bakery
    called Müller is not the drugstore), else the generic assortment of its OSM tag.
-   Medicines only match `amenity=pharmacy`.
+   Medicines only match `amenity=pharmacy`. `StoreCatalog.isBroad` marks the shops with a
+   full range: full-range supermarkets (Rewe, Edeka, Tegut ...), hypermarkets (Kaufland,
+   E center, Globus ...) and department stores, and among the other shops those tagged
+   `shop=department_store`, `hypermarket`, `general` or `supermarket`. Discounters and
+   variety stores (Action, TEDi ...) are not broad.
 3. A shop within the radius matches an item when it sells one of the item's assortments.
-   An item the app could not classify matches only broad shops (hypermarkets,
-   department and variety stores). An item also matches every shop it was bought at
+   An item the app could not classify matches only broad shops (full-range supermarkets,
+   hypermarkets, department stores). An item also matches every shop it was bought at
    before (purchase history, recorded when an item is ticked off within ~75 m of a shop).
 4. Shops are ranked by number of matched items, learned matches and known chains weigh
    extra, then distance. Duplicate OSM objects for the same shop are merged.
+   `MatchService.matchesAround` runs the matcher on `Dispatchers.Default` ("In der Nähe"
+   calls it from the main thread, with up to 5 km of city shops).
 
 The item dialog shows "Wird automatisch gesucht" with the assortments and example chains
 (`StoreCatalog.exampleChains`), so the user sees where an item will be looked for.
@@ -147,6 +157,12 @@ Settings: interval (1, 2, 5, 10, 15, 30, 60 min; default 15), radius (default
 against every cached shop in the radius again, so a new item is looked for at the next
 check.
 
+Version 1 stored every setting on each save, including its default radius of 500 m.
+`SettingsUpgradeMigration` (a DataStore migration that runs once, marker
+`upgrade_v2_done`) turns a stored 500 m into 1 km and, for users who already had a
+Gemini key, turns "Artikel mit Gemini einordnen" off (they were told only photos go to
+Gemini).
+
 - Interval >= 15 min: WorkManager unique periodic work.
 - Interval < 15 min: foreground service of type `location` with a permanent
   notification, driven by fused location updates at that interval; WorkManager
@@ -155,8 +171,11 @@ check.
   (max 90), refreshed on each check, re-registered after boot.
 - Each check: location -> refresh shop cache if needed (Overpass, download
   radius max(3 km, 4x radius) up to 10 km, refresh after 7 days or when leaving
-  the downloaded area) -> classify new items with Gemini -> match -> filter closed shops / quiet hours / cooldown ->
-  notify (max 3 shops per check) -> update geofences.
+  the downloaded area) -> match -> filter closed shops / quiet hours / cooldown ->
+  notify (max 3 shops per check) -> update geofences -> classify left-over items with
+  Gemini. Gemini comes last so no request delays a notification; its answers count from
+  the next check. Checks started by a geofence skip it (the broadcast must finish within
+  seconds), and "Jetzt prüfen" starts it without waiting.
 - The foreground service is started only when background location is granted
   or the app is in the foreground; otherwise only the 15-minute WorkManager
   backup runs (Android 14 refuses a location foreground service started from
@@ -176,7 +195,7 @@ check.
 | Overpass API (OpenStreetMap): `overpass-api.de`, fallback `overpass.private.coffee` | Shop locations | Approximate area (center rounded to 3 decimals, about 100 m, + radius) |
 | Open Food Facts and sister DBs (Open Products/Beauty/Pet Food Facts) | Barcode -> product name | The barcode |
 | Gemini API (user's own key) | Photo -> name + category | The photo and the names of all categories, including the user's own (`GeminiApi.prompt`) |
-| Gemini API (user's own key, "Artikel mit Gemini einordnen") | Item name -> assortments | The item name only, once per name (`GeminiApi.assortmentPrompt`) |
+| Gemini API (user's own key, "Artikel mit Gemini einordnen"; on by default, off for users who had a key before the setting existed) | Item name -> assortments | The item name only, once per name (`GeminiApi.assortmentPrompt`) |
 | ML Kit barcode scanning (bundled model) | Reading barcodes on the device | No images; per Google's ML Kit disclosure, usage and performance metrics (device model, app version, error codes) |
 
 Attribution shown in the app: "Kartendaten © OpenStreetMap-Mitwirkende (ODbL)",

@@ -81,11 +81,15 @@ object OverpassApi {
         )
     }
 
-    /** `shop=<value>` (first value of a `;` list), else `amenity=pharmacy`, else null. */
+    /**
+     * `amenity=pharmacy`, else `shop=<value>` (first value of a `;` list), else null. A pharmacy
+     * comes first: in Germany it is always an Apotheke, even when it also carries a shop tag such
+     * as `shop=chemist`, and only `amenity=pharmacy` sells medicines.
+     */
     private fun shopTag(tags: JsonObject): String? {
+        if (tags.string("amenity") == "pharmacy") return "amenity=pharmacy"
         val shop = tags.string("shop")?.substringBefore(';')?.trim()?.takeIf { it.isNotEmpty() }
         if (shop != null && shop.lowercase(Locale.ROOT) !in IGNORED_SHOP_VALUES) return "shop=$shop"
-        if (tags.string("amenity") == "pharmacy") return "amenity=pharmacy"
         return null
     }
 

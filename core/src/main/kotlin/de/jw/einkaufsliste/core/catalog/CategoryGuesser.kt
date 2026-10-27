@@ -9,7 +9,7 @@ object CategoryGuesser {
      * keywords of up to three letters ("Ei", "Eis", "Tee") match whole words only. On
      * equal length the keyword further right wins (the head of a German compound).
      * Freezer markers ("TK", "tiefgekühlt", "Pizza", "Eis" as a word) decide the
-     * category unless the winning keyword contains the marker itself ("Pizzateig").
+     * category unless the winning keyword names the marker itself (see [isAbout]).
      */
     fun guess(name: String): String? = guessWords(words(name))
 
@@ -17,11 +17,23 @@ object CategoryGuesser {
     internal fun guessWords(words: List<String>): String? {
         if (words.isEmpty()) return null
         val winner = index.find(words)
-        val joined = words.joinToString("")
-        val marker = words.firstOrNull { it in FREEZER_WORDS } ?: FREEZER_PARTS.firstOrNull { it in joined }
-        if (marker != null && (winner == null || marker !in winner.text)) return FREEZER_SLUG
+        val marker = freezerMarker(words)
+        if (marker != null && (winner == null || !isAbout(winner.text, marker))) return FREEZER_SLUG
         return winner?.value
     }
+
+    /** The first freezer marker in [words]: "tk" or "eis" as a word, else a part such as "tiefkuehl" or "pizza". */
+    internal fun freezerMarker(words: List<String>): String? {
+        val joined = words.joinToString("")
+        return words.firstOrNull { it in FREEZER_WORDS } ?: FREEZER_PARTS.firstOrNull { it in joined }
+    }
+
+    /**
+     * Whether the winning [keyword] names the freezer [marker] itself, so the marker does not
+     * decide: "Pizzateig" and "Eiskratzer" are about "Pizza" and "Eis", "Rotkohl" is not about "TK".
+     */
+    internal fun isAbout(keyword: String, marker: String): Boolean =
+        if (marker in FREEZER_WORDS) keyword.startsWith(marker) else marker in keyword
 
     /** Lowercase words without umlauts, accents, digits, units and punctuation ("1,5 l H-Milch" -> [h, milch]). */
     internal fun words(text: String): List<String> = KeywordIndex.words(text)
@@ -32,7 +44,7 @@ object CategoryGuesser {
     /** The category slug of freezer items. */
     internal const val FREEZER_SLUG = "tiefkuehl"
     private val FREEZER_WORDS = setOf("tk", "eis")
-    private val FREEZER_PARTS = listOf("tiefkuehl", "tiefgekuehlt", "tiefgefroren", "gefroren", "frozen", "pizza")
+    private val FREEZER_PARTS = listOf("tiefkuehl", "tiefgekuehlt", "tiefgefroren", "gefroren", "pizza")
 
     /** The keywords behind [guess], valued by category slug; [AssortmentGuesser] reuses them. */
     internal val index: KeywordIndex<String> = KeywordIndex(KeywordIndex.parse(DICTIONARY))
@@ -57,13 +69,18 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         radieschen, rettich, meerrettich, rote bete, rote beete, rote rüben, ingwer, petersilie, schnittlauch,
         basilikum, dill, koriander, minze, rosmarin, thymian, salbei, kräuter, frühlingszwiebel, lauchzwiebel,
         artischocke, =okra, pastinake, spargel, chili, suppengrün, kresse, sprossen, salatherz, romana, endivie,
-        chicoree, radicchio, mangold, topinambur, steckrübe, schwarzwurzel, fleischtomate
+        chicoree, radicchio, mangold, topinambur, steckrübe, schwarzwurzel, fleischtomate, brokoli, brockoli,
+        zuccini, zuchini, datteln, rukola
     """,
     "brot_backwaren" to """
         brot, brötchen, semmel, schrippe, =weck, =wecken, =weckle, baguette, toast, croissant, brezel, breze,
         laugen, kuchen, torte, muffin, donut, krapfen, zwieback, ciabatta, bagel, brioche, hefezopf, plunder,
         pumpernickel, wraps, =wrap, =pita, gebäck, backwaren, sandwich, strudel, pfannkuchen, biskuit,
-        streuselkuchen, windbeutel, bäckerei, tortilla
+        streuselkuchen, windbeutel, bäckerei, tortilla, kartoffelbrot, zwiebelbrot, walnussbrot,
+        sonnenblumenbrot, sonnenblumenkernbrot, kürbiskernbrot, olivenbrot, rosinenbrot, bananenbrot, früchtebrot,
+        haferbrot, erdbeerkuchen, erdbeertorte, himbeertorte, obstkuchen, obsttorte, zwetschgenkuchen,
+        pflaumenkuchen, rhabarberkuchen, zwiebelkuchen, apfeltasche, quarktasche, zimtschnecke, nussschnecke,
+        streuselschnecke, puddingbrezel, quarkbällchen, cremeschnitte, stollen, =berliner
     """,
     "milch_eier" to """
         milch, vollmilch, frischmilch, buttermilch, milchprodukte, butter, margarine, käse, gouda, emmentaler,
@@ -73,7 +90,8 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         halloumi, hirtenkäse, schafskäse, ziegenkäse, hafermilch, haferdrink, mandelmilch, sojamilch, reismilch,
         pflanzendrink, schokomilch, kakaomilch, bananenmilch, butterschmalz, kräuterbutter, babybel, philadelphia,
         leerdammer, kerrygold, =rama, lätta, cremefine, fruchtzwerge, pizzakäse, pizzateig, blätterteig,
-        flammkuchenteig, hefeteig, mürbeteig, strudelteig, fertigteig
+        flammkuchenteig, hefeteig, mürbeteig, strudelteig, fertigteig, pflanzenmilch, pflanzensahne, mozarella,
+        mozzarela, yogurt, tofu
     """,
     "fleisch_wurst" to """
         fleisch, hackfleisch, =hack, gehacktes, hackepeter, mett, zwiebelmett, wurst, würst, aufschnitt, salami,
@@ -89,14 +107,14 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         fisch, lachs, räucherlachs, seelachs, wildlachs, lachsfilet, lachssteak, fischfilet, hering, matjes,
         rollmops, forelle, garnele, shrimps, krabben, scampi, gambas, muscheln, kabeljau, dorsch, makrele,
         sardine, sardellen, thunfisch, zander, tilapia, pangasius, tintenfisch, calamari, surimi, kaviar,
-        backfisch, =aal, =aale, hummer, scholle, barsch, karpfen, heilbutt, seehecht, dorade, sushi
+        backfisch, =aal, =aale, hummer, scholle, barsch, karpfen, heilbutt, seehecht, dorade, sushi, fischfrikadelle
     """,
     "tiefkuehl" to """
         tiefkühl, tiefkühlkost, tiefgekühlt, tiefgefroren, gefroren, =tk, pizza, eiswürfel, speiseeis, eiscreme,
         =eis, vanilleeis, schokoeis, schokoladeneis, erdbeereis, himbeereis, zitroneneis, joghurteis, stieleis,
         wassereis, softeis, eis am stiel, pommes, kroketten, fischstäbchen, rahmspinat, schlemmerfilet, nuggets,
         gemüsepfanne, rösti, =magnum, langnese, iglo, frosta, flammkuchen, frühlingsrollen, germknödel,
-        kräuterbaguette, pizzabaguette, nudelpfanne, reispfanne
+        kräuterbaguette, pizzabaguette, nudelpfanne, reispfanne, frozen yogurt, frozen joghurt
     """,
     "vorrat" to """
         vorräte, nudel, pasta, spaghetti, penne, fusilli, farfalle, tagliatelle, makkaroni, maccaroni, rigatoni,
@@ -118,7 +136,8 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         trockenfrüchte, kräutersalz, tomatensuppe, kartoffelsuppe, erbsensuppe, gulaschsuppe, hühnersuppe,
         gemüsesuppe, kürbissuppe, zwiebelsuppe, salsa, guacamole, hummus, =dip, dips, flocken, antipasti,
         sushireis, maultaschen, weinessig, rotweinessig, erdnussöl, würz, nougatcreme, schokocreme,
-        amaranth, udon, wasabi, nori, sambal
+        amaranth, udon, wasabi, nori, sambal, muschelnudel, tortelloni, hirschhornsalz, pflanzenfett,
+        langnese honig, pizzasoße, pizzasauce, spagetti, spageti, götterspeise, seitan, falafel, ketschup, majonäse
     """,
     "suesses_snacks" to """
         süß, snack, schokolade, schoko, chocolate, praline, bonbon, bonbons, gummibär, fruchtgummi, weingummi,
@@ -127,14 +146,18 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         nascherei, lutscher, marshmallow, waffel, spekulatius, lebkuchen, dominosteine, marzipan, nougat,
         studentenfutter, katzenzunge, erdnuss, erdnüsse, knabber, knabbergebäck, brownie, zuckerwatte,
         traubenzucker, toffifee, haribo, milka, toblerone, duplo, hanuta, kitkat, twix, snickers, bounty, oreo,
-        pringles, ritter sport, =mars, smarties, maoam, mentos, milchschnitte, kräuterbonbon, pfefferkuchen
+        pringles, ritter sport, =mars, smarties, maoam, mentos, milchschnitte, kräuterbonbon, pfefferkuchen,
+        süßigkeit, krabbenchips, gemüsechips, mikrowellenpopcorn, ü-ei, ü-eier, überraschungsei, mon cheri, =merci,
+        ferrero, raffaello, lindt
     """,
     "getraenke" to """
         getränk, wasser, mineralwasser, sprudel, saft, säfte, schorle, limo, limonade, zitronenlimonade, cola,
         fanta, sprite, pepsi, eistee, icetea, energydrink, energy drink, red bull, smoothie, nektar, orangensaft,
         apfelsaft, o-saft, traubensaft, kirschsaft, multivitaminsaft, ananassaft, maracujasaft, tomatensaft,
         karottensaft, gemüsesaft, grapefruitsaft, johannisbeersaft, fruchtsaft, tonic, ginger ale,
-        bitter lemon, spezi, =mate, club mate, malzbier, kokoswasser, capri sonne, bionade, kombucha, ingwershot
+        bitter lemon, =spezi, =spezis, paulaner spezi, =mate, club mate, malzbier, kokoswasser, capri sonne,
+        bionade, kombucha, ingwershot, kinderpunsch, kindersekt, ginger beer, pfand, leergut,
+        mezzo mix, =kola, gerolsteiner, volvic, vittel, hohes c, =monster, granini, fassbrause
     """,
     "alkohol" to """
         alkohol, bier, =beer, pils, =helles, hefeweizen, weizenbier, weißbier, radler, =alster, alsterwasser,
@@ -142,7 +165,9 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         schaumwein, vodka, wodka, whisky, whiskey, =rum, =gin, gin tonic, likör, eierlikör, schnaps, obstler,
         =korn, doppelkorn, tequila, aperol, campari, martini, spirituosen, cognac, brandy, weinbrand, cidre,
         cider, =met, amaretto, baileys, jägermeister, ouzo, absinth, limoncello, kirschwasser, grappa, sherry,
-        wermut, mezcal, kräuterlikör
+        wermut, mezcal, kräuterlikör, becks, krombacher, augustiner, warsteiner, bitburger, veltins, paulaner,
+        erdinger, radeberger, berliner pilsner, berliner kindl, berliner weiße, berliner luft, riesling,
+        grauburgunder, spätburgunder, weißburgunder, dornfelder, lambrusco, chardonnay, merlot, =hugo
     """,
     "kaffee_tee" to """
         kaffee, espresso, cappuccino, latte macchiato, kaffeebohne, filterkaffee, instantkaffee, nescafé,
@@ -162,7 +187,8 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         kosmetiktücher, feuchttücher, hygiene, intimpflege, lippenpflege, lippenbalsam, labello, nivea, peeling,
         gesichtsmaske, mizellen, gesichtswasser, reinigungsmilch, kontaktlinsen, pinzette, haargummi,
         haarspange, badesalz, schaumbad, badezusatz, ohrstöpsel, colgate, elmex, odol, blend-a-med, durex,
-        balea, garnier, l'oréal, gillette, wilkinson, schauma, rexona, sebamed, eucerin, taschentuch
+        balea, garnier, l'oréal, gillette, wilkinson, schauma, rexona, sebamed, eucerin, taschentuch, =tempos,
+        kleenex, q-tips, ohrenstäbchen
     """,
     "haushalt" to """
         haushalt, reinigung, klopapier, toilettenpapier, wc-papier, küchenrolle, küchenpapier, haushaltsrolle,
@@ -180,7 +206,8 @@ private val DICTIONARY: List<Pair<String, String>> = listOf(
         kuchenform, muffinform, nudelholz, küchenschere, pizzaschneider, =sieb, entkalker, somat, =finish,
         calgon, persil, ariel, lenor, sagrotan, domestos, meister proper, =pril, =fairy, vileda, swiffer,
         toppits, febreze, air wick, destilliert, duschvorhang, wasserfilter, schwämme, fliegen, fliegenklatsche,
-        scheuermilch, scheuerpulver, rohrfrei, zitronensäure, förmchen, kartusche, möbelpolitur, glas, gläser
+        scheuermilch, scheuerpulver, rohrfrei, zitronensäure, förmchen, kartusche, möbelpolitur, glas, gläser,
+        klorolle, küchentücher, =spüli, hakle, raumspray, duftstecker, duftstäbchen
     """,
     "baby" to """
         baby, windel, pampers, babynahrung, babybrei, babymilch, anfangsmilch, folgemilch, =pre, pre-nahrung,

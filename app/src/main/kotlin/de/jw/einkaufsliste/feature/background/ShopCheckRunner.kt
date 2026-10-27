@@ -15,6 +15,7 @@ import de.jw.einkaufsliste.data.db.NotificationLogEntity
 import de.jw.einkaufsliste.data.settings.AppSettings
 import de.jw.einkaufsliste.feature.shops.ShopRefreshResult
 import de.jw.einkaufsliste.feature.shops.ShopRepository
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
@@ -28,8 +29,8 @@ data class CheckOutcome(val notifiedShops: Int, val matchingShops: Int, val mess
 
 /**
  * The shop check shared by WorkManager, the foreground service, geofences and the manual
- * "Jetzt prüfen": location -> shop cache -> classify new items -> matching every shop in the
- * radius -> filters -> notifications -> geofences.
+ * "Jetzt prüfen": location -> shop cache -> matching every shop in the radius -> filters ->
+ * notifications -> geofences -> classifying left-over items with Gemini.
  */
 class ShopCheckRunner(private val context: Context, private val container: AppContainer) {
     private val notifier by lazy { ShopNotifier(context) }
@@ -81,8 +82,6 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
 
         // A failed download is fine as long as the cache has shops here.
         val refresh = runLogging(TAG, "Shop refresh failed") { container.shopRepository.ensureShopsAround(here) }
-        // Items are classified when they are added; this catches those added offline or before a Gemini key was set.
-        container.assortmentService.classifyOpenItems()
 
         val radius = settings.radiusMeters
         val geofenceIds = if (trigger == CheckTrigger.GEOFENCE) geofenceShopIds.toSet() else emptySet()
@@ -124,6 +123,7 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
             geofences.replaceAll(GeofenceSelector.select(here, wide), geofenceRadius)
         }
         runLogging(TAG, "Housekeeping failed") { housekeeping() }
+        classifyLeftovers(trigger)
 
         val message = when {
             // The cache may hold shops from elsewhere (home), but none here: say why there is nothing.
@@ -164,6 +164,20 @@ class ShopCheckRunner(private val context: Context, private val container: AppCo
                 for (id in due.flatMap { it.second }) log.upsert(NotificationLogEntity(shopId = id, lastNotifiedAt = now))
             }
             posted.size
+        }
+    }
+
+    /**
+     * Asks Gemini about items added offline, before a key was saved or by a backup import (new
+     * items are classified when they are added). It comes last, so no request delays a
+     * notification, and its answers count from the next check. Geofence checks skip it: their
+     * broadcast must finish within seconds. "Jetzt prüfen" does not wait for it.
+     */
+    private suspend fun classifyLeftovers(trigger: CheckTrigger) {
+        when (trigger) {
+            CheckTrigger.GEOFENCE -> Unit
+            CheckTrigger.MANUAL -> container.appScope.launch { container.assortmentService.classifyOpenItems() }
+            CheckTrigger.PERIODIC, CheckTrigger.SERVICE, CheckTrigger.BOOT -> container.assortmentService.classifyOpenItems()
         }
     }
 
