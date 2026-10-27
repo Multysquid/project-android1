@@ -11,9 +11,11 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## APK herunterladen
 
-GitHub baut die APK bei jeder Änderung neu (`.github/workflows/apk.yml`). Sie liegt beim
-jeweiligen Lauf unter *Actions → APK bauen → Artifacts* als `einkaufsliste-apk` (ZIP mit
-`einkaufsliste.apk`, Download nur mit GitHub-Konto).
+Die neueste fertige APK gibt es hier:
+<https://github.com/Multysquid/project-android1/releases/latest/download/einkaufsliste.apk>
+
+GitHub baut sie bei jeder Änderung neu (`.github/workflows/apk.yml`). Den Link einfach auf
+dem Handy öffnen und weiter bei [Auf das Handy bringen](#auf-das-handy-bringen).
 
 ## Bauen
 
@@ -40,7 +42,7 @@ ohne Android SDK testen:
 
 ## Auf das Handy bringen
 
-1. Die APK von GitHub (siehe oben, ZIP vorher entpacken) oder eine selbst gebaute APK aufs Handy
+1. Die APK über den Link oben herunterladen oder eine selbst gebaute APK aufs Handy
    kopieren (z. B. per USB-Kabel in den Ordner „Download“) und in „Eigene Dateien“
    antippen. Wenn Android nachfragt: „Einstellungen“ → „Aus dieser Quelle zulassen“
    einschalten, zurückgehen und „Installieren“ tippen.

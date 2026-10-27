@@ -1,5 +1,7 @@
-# Builds the installable APK on every branch push; it is attached to the run as the
-# artifact "einkaufsliste-apk".
+# Builds the installable APK on every branch push. Pushes to main (and to the first PR
+# branch, until it is merged) also replace the release "apk", so this link always points
+# at the newest build:
+# https://github.com/Multysquid/project-android1/releases/latest/download/einkaufsliste.apk
 name: APK bauen
 
 on:
@@ -8,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   checks: write
 
 concurrency:
@@ -82,3 +84,33 @@ jobs:
           path: einkaufsliste.apk
           if-no-files-found: error
 
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/einkaufsliste-app'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: apk-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: einkaufsliste-apk
+
+      - name: Release "apk" ersetzen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          notes="APK zum direkten Installieren auf Android 10 oder neuer.
+
+          Auf dem Handy herunterladen, antippen und „Installieren“ wählen. Beim ersten Mal
+          fragt Android, ob Installationen aus dieser Quelle erlaubt sind. Eine neue Version
+          installiert sich über die alte, die Liste bleibt erhalten.
+
+          Gebaut aus Commit ${GITHUB_SHA} (Branch ${GITHUB_REF_NAME}, Lauf ${GITHUB_RUN_NUMBER})."
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk einkaufsliste.apk \
+            --target "$GITHUB_SHA" \
+            --title "Einkaufsliste (Build ${GITHUB_RUN_NUMBER})" \
+            --notes "$notes" \
+            --latest
