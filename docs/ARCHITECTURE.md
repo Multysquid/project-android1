@@ -70,6 +70,17 @@ No DI framework: `AppContainer` holds everything; get it with
 | `app/.../feature/background` | Location, WorkManager, foreground service, geofences, notifications, purchase learning |
 | `app/.../feature/settings` | Settings screen, permissions flow, Samsung battery setup |
 
+## App icon
+
+The launcher icon (brain with a lightning bolt) is an adaptive icon made of vector
+drawables. Its masters are the SVGs in `docs/icon/` (foreground, monochrome for themed
+icons, the 24 dp notification icon; background colour in `background.txt`). After changing
+one, regenerate the drawable, e.g.
+`python3 docs/icon/svg2vd.py docs/icon/foreground.svg app/src/main/res/drawable/ic_launcher_foreground.xml 108`
+(monochrome: `ic_launcher_monochrome.xml`, 108; notification: `ic_notification.xml`, 24) and
+copy the background colour into `ic_launcher_background` in `res/values/colors.xml`.
+The converter accepts only the SVG subset it documents and fails on anything else.
+
 ## Data model
 
 See `app/.../data/db/Entities.kt`. Categories have a stable `slug` (defaults from
