@@ -104,8 +104,11 @@ jobs:
           notes="APK zum direkten Installieren auf Android 10 oder neuer.
 
           Auf dem Handy herunterladen, antippen und „Installieren“ wählen. Beim ersten Mal
-          fragt Android, ob Installationen aus dieser Quelle erlaubt sind. Eine neue Version
-          installiert sich über die alte, die Liste bleibt erhalten.
+          fragt Android, ob Installationen aus dieser Quelle erlaubt sind.
+
+          Jeder Build ist mit einem neuen Schlüssel signiert. Für ein Update deshalb vorher in
+          der App unter Einstellungen „Liste sichern“ exportieren, die alte App deinstallieren,
+          die neue installieren und die Liste wieder importieren.
 
           Gebaut aus Commit ${GITHUB_SHA} (Branch ${GITHUB_REF_NAME}, Lauf ${GITHUB_RUN_NUMBER})."
           gh release delete apk --yes --cleanup-tag || true
