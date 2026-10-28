@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.jw.einkaufsliste.AppContainer
 import de.jw.einkaufsliste.core.backup.BackupFormatException
+import de.jw.einkaufsliste.core.gemini.GeminiModel
 import de.jw.einkaufsliste.data.repo.BackupService
 import de.jw.einkaufsliste.data.settings.AppSettings
 import de.jw.einkaufsliste.feature.background.CheckTrigger
@@ -42,6 +43,16 @@ internal enum class SettingsMessageAction(val label: String) {
 /** A one-off German snackbar message, optionally with a button. */
 internal data class SettingsMessage(val text: String, val action: SettingsMessageAction? = null)
 
+/**
+ * Google's model list for the stored key: [fromGoogle] is null until it was loaded (or when
+ * there is no key), [failed] says the last attempt did not work.
+ */
+internal data class GeminiModelList(
+    val fromGoogle: List<GeminiModel>? = null,
+    val loading: Boolean = false,
+    val failed: Boolean = false,
+)
+
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val settingsRepository = container.settingsRepository
     private val apiKeyStore = container.apiKeyStore
@@ -65,6 +76,13 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _keyTestRunning = MutableStateFlow(false)
     val keyTestRunning: StateFlow<Boolean> = _keyTestRunning.asStateFlow()
+
+    private val _geminiModels = MutableStateFlow(GeminiModelList())
+
+    /** The models the stored key can use, for the model picker. */
+    internal val geminiModels: StateFlow<GeminiModelList> = _geminiModels.asStateFlow()
+
+    private var modelListJob: Job? = null
 
     private val _backupRunning = MutableStateFlow(false)
 
@@ -122,6 +140,27 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setGeminiModel(model: String) {
         save { it.copy(geminiModel = model) }
+    }
+
+    /**
+     * Loads the models the stored key can use, once per screen unless [force]; without a key
+     * the picker keeps showing the known models.
+     */
+    fun loadGeminiModels(force: Boolean = false) {
+        val current = _geminiModels.value
+        if (current.loading || (!force && current.fromGoogle != null)) return
+        if (!apiKeyStore.hasKey.value) {
+            _geminiModels.value = GeminiModelList()
+            return
+        }
+        _geminiModels.value = current.copy(loading = true, failed = false)
+        modelListJob = viewModelScope.launch {
+            val result = container.geminiClient.listModels()
+            _geminiModels.value = result.fold(
+                onSuccess = { GeminiModelList(fromGoogle = it) },
+                onFailure = { _geminiModels.value.copy(loading = false, failed = true) },
+            )
+        }
     }
 
     /** Turning it on asks Gemini about the open items right away, so the next check already uses the answers. */
@@ -241,25 +280,30 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             val saved = withContext(Dispatchers.Default) { runCatching { apiKeyStore.set(apiKey) }.isSuccess }
             showMessage(if (saved) "Schlüssel gespeichert." else "Der Schlüssel konnte nicht gespeichert werden.")
-            if (saved) container.appScope.launch { container.assortmentService.classifyOpenItems() }
+            if (saved) {
+                resetGeminiModels()
+                loadGeminiModels()
+                container.appScope.launch { container.assortmentService.classifyOpenItems() }
+            }
         }
     }
 
     /**
-     * Tests [enteredKey], or the stored key when null. [model] is saved first, because the
-     * client reads the model from the settings.
+     * Tests [enteredKey], or the stored key when null, with the chosen model. Waits for settings
+     * writes already started (a model picked just before), because the client reads the model
+     * from the settings.
      */
-    fun testApiKey(enteredKey: String?, model: String) {
+    fun testApiKey(enteredKey: String?) {
         if (_keyTestRunning.value) return
         _keyTestRunning.value = true
         viewModelScope.launch {
             try {
-                save { it.copy(geminiModel = model) }.join()
+                writeLock.withLock { }
                 val result = container.geminiClient.testKey(enteredKey)
                 val message = result.fold(
                     onSuccess = {
-                        if (enteredKey != null) "Schlüssel funktioniert. Zum Behalten auf „Speichern“ tippen."
-                        else "Schlüssel funktioniert."
+                        if (enteredKey != null) "Schlüssel und Modell funktionieren. Zum Behalten auf „Speichern“ tippen."
+                        else "Schlüssel und Modell funktionieren."
                     },
                     onFailure = { it.message ?: GeminiClient.MESSAGE_UNEXPECTED },
                 )
@@ -316,7 +360,15 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteApiKey() {
         apiKeyStore.clear()
+        resetGeminiModels()
         showMessage("Schlüssel gelöscht.")
+    }
+
+    /** Forgets the model list of the previous key, also one still loading. */
+    private fun resetGeminiModels() {
+        modelListJob?.cancel()
+        modelListJob = null
+        _geminiModels.value = GeminiModelList()
     }
 
     /**

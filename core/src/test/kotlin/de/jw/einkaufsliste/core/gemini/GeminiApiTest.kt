@@ -9,7 +9,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -50,7 +49,8 @@ class GeminiApiTest {
         assertEquals("aGVsbG8+/w==", inline.getValue("data").jsonPrimitive.content)
 
         val config = body.getValue("generationConfig").jsonObject
-        assertEquals(0.2, config.getValue("temperature").jsonPrimitive.double, 0.0)
+        // The default model is a Gemini 3 model: Google asks to keep its sampling defaults.
+        assertFalse(config.containsKey("temperature"))
         assertEquals("application/json", config.getValue("responseMimeType").jsonPrimitive.content)
         val schema = config.getValue("responseSchema").jsonObject
         assertEquals("OBJECT", schema.getValue("type").jsonPrimitive.content)
@@ -73,9 +73,53 @@ class GeminiApiTest {
         val body = GeminiApi.buildRequest("AAAA", "image/png", CategoryCatalog.defaults)
         assertTrue(body.startsWith("{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":"))
         assertTrue(body.contains("{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AAAA\"}}"))
-        assertTrue(body.contains("\"generationConfig\":{\"temperature\":0.2,\"responseMimeType\":\"application/json\""))
+        assertTrue(body.contains("\"generationConfig\":{\"responseMimeType\":\"application/json\""))
         assertTrue(body.contains("\"quantity\":{\"type\":\"STRING\",\"nullable\":true}"))
         assertTrue(body.endsWith("\"required\":[\"name\",\"categorySlug\"]}}}"))
+    }
+
+    @Test
+    fun olderModelsGetALowTemperature() {
+        for (model in listOf("gemini-2.5-flash", "models/gemini-2.5-pro", "gemini-2.0-flash-lite", "gemini-1.5-flash-002")) {
+            val photo = GeminiApi.buildRequest("AAAA", "image/png", CategoryCatalog.defaults, model)
+            assertTrue(model, photo.contains("\"generationConfig\":{\"temperature\":0.2,\"responseMimeType\":\"application/json\""))
+            val name = GeminiApi.buildAssortmentRequest("Milch", model)
+            assertTrue(model, name.contains("\"generationConfig\":{\"temperature\":0.0,\"responseMimeType\":\"application/json\""))
+        }
+    }
+
+    @Test
+    fun newerAndUnknownModelsKeepTheirDefaultTemperature() {
+        for (model in listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-4-argon", "gemini-flash-latest", "my-model", "")) {
+            val photo = Json.parseToJsonElement(GeminiApi.buildRequest("AAAA", "image/png", CategoryCatalog.defaults, model))
+                .jsonObject.getValue("generationConfig").jsonObject
+            assertFalse(model, photo.containsKey("temperature"))
+            val name = Json.parseToJsonElement(GeminiApi.buildAssortmentRequest("Milch", model))
+                .jsonObject.getValue("generationConfig").jsonObject
+            assertFalse(model, name.containsKey("temperature"))
+        }
+    }
+
+    @Test
+    fun testRequestIsATinyTextQuestion() {
+        val body = Json.parseToJsonElement(GeminiApi.buildTestRequest()).jsonObject
+        assertEquals(setOf("contents"), body.keys)
+        val content = body.getValue("contents").jsonArray.single().jsonObject
+        assertEquals("user", content.getValue("role").jsonPrimitive.content)
+        val part = content.getValue("parts").jsonArray.single().jsonObject
+        assertEquals(setOf("text"), part.keys)
+    }
+
+    @Test
+    fun endpointAcceptsTheApisOwnModelNamesAndFallsBackToTheDefault() {
+        assertEquals(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+            GeminiApi.endpoint("models/gemini-3.5-flash-lite"),
+        )
+        assertEquals(
+            "https://generativelanguage.googleapis.com/v1beta/models/${GeminiApi.DEFAULT_MODEL}:generateContent",
+            GeminiApi.endpoint("  "),
+        )
     }
 
     @Test
@@ -308,7 +352,7 @@ class GeminiApiTest {
         assertEquals(GeminiApi.assortmentPrompt("Hafermilch"), part.getValue("text").jsonPrimitive.content)
 
         val config = body.getValue("generationConfig").jsonObject
-        assertEquals(0.0, config.getValue("temperature").jsonPrimitive.double, 0.0)
+        assertFalse(config.containsKey("temperature"))
         assertEquals("application/json", config.getValue("responseMimeType").jsonPrimitive.content)
         val schema = config.getValue("responseSchema").jsonObject
         assertEquals("OBJECT", schema.getValue("type").jsonPrimitive.content)
@@ -328,7 +372,7 @@ class GeminiApiTest {
     fun assortmentRequestTextIsCompactJson() {
         val body = GeminiApi.buildAssortmentRequest("Milch")
         assertTrue(body.startsWith("{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":"))
-        assertTrue(body.contains("\"generationConfig\":{\"temperature\":0.0,\"responseMimeType\":\"application/json\""))
+        assertTrue(body.contains("\"generationConfig\":{\"responseMimeType\":\"application/json\""))
         assertTrue(body.endsWith("\"required\":[\"assortments\"]}}}"))
     }
 
@@ -572,7 +616,7 @@ class GeminiApiTest {
             }
         """.trimIndent()
         assertEquals(
-            "Dieses Gemini-Modell gibt es nicht. Bitte den Modellnamen in den Einstellungen prüfen.",
+            GeminiApi.MESSAGE_MODEL_UNAVAILABLE,
             GeminiApi.errorMessage(404, body),
         )
     }

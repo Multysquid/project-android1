@@ -3,6 +3,8 @@ package de.jw.einkaufsliste.feature.gemini
 import de.jw.einkaufsliste.core.catalog.Assortment
 import de.jw.einkaufsliste.core.gemini.GeminiApi
 import de.jw.einkaufsliste.core.gemini.GeminiException
+import de.jw.einkaufsliste.core.gemini.GeminiModel
+import de.jw.einkaufsliste.core.gemini.GeminiModels
 import de.jw.einkaufsliste.core.model.RecognizedItem
 import de.jw.einkaufsliste.data.db.toDef
 import de.jw.einkaufsliste.data.net.fetch
@@ -46,6 +48,7 @@ class GeminiClient(
                 imageBase64 = Base64.getEncoder().encodeToString(jpeg),
                 mimeType = "image/jpeg",
                 categories = categories,
+                model = model,
             )
             val request = requestBuilder(GeminiApi.endpoint(model), apiKey)
                 .post(body.toRequestBody(JSON))
@@ -62,7 +65,7 @@ class GeminiClient(
             val apiKey = apiKeyStore.get() ?: throw GeminiSettingsException(MESSAGE_NO_KEY)
             val model = modelName(settings.current().geminiModel)
             val request = requestBuilder(GeminiApi.endpoint(model), apiKey)
-                .post(GeminiApi.buildAssortmentRequest(itemName).toRequestBody(JSON))
+                .post(GeminiApi.buildAssortmentRequest(itemName, model).toRequestBody(JSON))
                 .build()
             val response = http.fetch(request)
             if (!response.isSuccessful) throw httpError(response.code, response.body)
@@ -70,18 +73,49 @@ class GeminiClient(
         }
     }
 
-    /** Checks [apiKey] (or the stored key when null) with a cheap request; failure carries a German message. */
+    /**
+     * Checks [apiKey] (or the stored key when null) together with the chosen model by asking it
+     * a tiny question; failure carries a German message. Reading the model's details is not
+     * enough: Google lists models that a new key may no longer use.
+     */
     suspend fun testKey(apiKey: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         guarded {
-            val key = apiKey?.trim()?.takeIf { it.isNotEmpty() }
-                ?: apiKeyStore.get()
-                ?: throw GeminiSettingsException(MESSAGE_NO_KEY)
+            val key = keyOrStored(apiKey)
             val model = modelName(settings.current().geminiModel)
-            val response = http.fetch(requestBuilder(MODELS_URL + model, key).get().build())
+            val request = requestBuilder(GeminiApi.endpoint(model), key)
+                .post(GeminiApi.buildTestRequest().toRequestBody(JSON))
+                .build()
+            val response = http.fetch(request)
             if (!response.isSuccessful) throw httpError(response.code, response.body)
             Unit
         }
     }
+
+    /**
+     * The models [apiKey] (or the stored key when null) can ask for text, as Google lists them
+     * (see [GeminiModels.parsePage]); failure carries a German message.
+     */
+    suspend fun listModels(apiKey: String? = null): Result<List<GeminiModel>> = withContext(Dispatchers.IO) {
+        guarded {
+            val key = keyOrStored(apiKey)
+            val models = mutableListOf<GeminiModel>()
+            var pageToken: String? = null
+            // A few pages at most, in case the API keeps answering with the same token.
+            repeat(MAX_MODEL_PAGES) {
+                val response = http.fetch(requestBuilder(GeminiModels.listUrl(pageToken), key).get().build())
+                if (!response.isSuccessful) throw httpError(response.code, response.body)
+                val page = GeminiModels.parsePage(response.body)
+                models += page.models
+                pageToken = page.nextPageToken ?: return@guarded models.distinctBy { it.id }
+            }
+            models.distinctBy { it.id }
+        }
+    }
+
+    private fun keyOrStored(apiKey: String?): String =
+        apiKey?.trim()?.takeIf { it.isNotEmpty() }
+            ?: apiKeyStore.get()
+            ?: throw GeminiSettingsException(MESSAGE_NO_KEY)
 
     /** Runs [block] and turns every failure into a [Result.failure] with a German message. */
     private inline fun <T> guarded(block: () -> T): Result<T> =
@@ -122,9 +156,8 @@ class GeminiClient(
         }
     }
 
-    /** Accepts "gemini-2.5-flash" as well as the API's own "models/gemini-2.5-flash". */
-    private fun modelName(setting: String): String =
-        setting.trim().removePrefix("models/").ifEmpty { GeminiApi.DEFAULT_MODEL }
+    /** Accepts "gemini-3.8-flash" as well as the API's own "models/gemini-3.8-flash". */
+    private fun modelName(setting: String): String = GeminiModels.normalizeId(setting)
 
     companion object {
         const val MESSAGE_NO_KEY = "Kein Gemini-API-Schlüssel hinterlegt."
@@ -134,7 +167,8 @@ class GeminiClient(
         const val MESSAGE_BAD_MODEL = "Der Modellname ist ungültig. Bitte in den Einstellungen prüfen."
         const val MESSAGE_UNEXPECTED = "Bei der Anfrage an Gemini ist ein Fehler aufgetreten."
 
-        private const val MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+        /** Pages of the model list read at most; one page holds up to 1000 models. */
+        private const val MAX_MODEL_PAGES = 5
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

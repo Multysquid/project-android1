@@ -61,7 +61,7 @@ No DI framework: `AppContainer` holds everything; get it with
 | `core/.../core/geofence` | Which shops get a geofence |
 | `core/.../core/osm` | Overpass query/parser, `opening_hours` evaluation |
 | `core/.../core/products` | Open*Facts URL, parser, category mapping, barcode check digits |
-| `core/.../core/gemini` | Gemini request body, response parsing, German error messages |
+| `core/.../core/gemini` | Gemini request body, response parsing, German error messages; `GeminiModels`: model list parsing, filter and order for the model picker |
 | `app/.../data` | Room, DataStore settings, API key store, HTTP helper, repositories, `MatchService`, `AssortmentService` |
 | `app/.../ui` | Theme, navigation, notification channels, shared `CategoryPicker` |
 | `app/.../feature/list` + `categories` | List screen with Unterlisten, add/edit, category editor |
@@ -158,10 +158,23 @@ against every cached shop in the radius again, so a new item is looked for at th
 check.
 
 Version 1 stored every setting on each save, including its default radius of 500 m.
-`SettingsUpgradeMigration` (a DataStore migration that runs once, marker
-`upgrade_v2_done`) turns a stored 500 m into 1 km and, for users who already had a
-Gemini key, turns "Artikel mit Gemini einordnen" off (they were told only photos go to
-Gemini).
+`SettingsUpgradeMigration` (a DataStore migration; each step runs once) turns a stored
+500 m into 1 km and, for users who already had a Gemini key, turns "Artikel mit Gemini
+einordnen" off (they were told only photos go to Gemini); marker `upgrade_v2_done`. Step 3
+(marker `upgrade_v3_done`) replaces the old default model `gemini-2.5-flash` with the new
+default: since September 2026 Google lets only keys that used the 2.5 models before call
+them, while still listing them for every key.
+
+Gemini model: one setting for photos and item names, default `GeminiApi.DEFAULT_MODEL`
+(`gemini-3.8-flash`, Google's recommendation for new projects in October 2026). The picker
+in the settings offers Google's model list for the stored key (`GeminiClient.listModels`,
+filtered by `GeminiModels.isPickable` to models that answer `generateContent` with text),
+or `GeminiModels.KNOWN` without a key or when the list cannot be loaded, plus a free-text
+entry for unlisted names. "Prüfen" sends a tiny real `generateContent` request
+(`GeminiApi.buildTestRequest`), because reading a model's details succeeds for models the
+key may not use. Requests set a temperature only for Gemini 1.x/2.x models
+(`GeminiModels.acceptsTemperature`); Google asks to keep the sampling defaults from
+Gemini 3 on.
 
 - Interval >= 15 min: WorkManager unique periodic work.
 - Interval < 15 min: foreground service of type `location` with a permanent

@@ -165,6 +165,7 @@ private fun SettingsContent(
     val hasApiKey by viewModel.hasApiKey.collectAsStateWithLifecycle()
     val checkRunning by viewModel.checkRunning.collectAsStateWithLifecycle()
     val keyTestRunning by viewModel.keyTestRunning.collectAsStateWithLifecycle()
+    val geminiModels by viewModel.geminiModels.collectAsStateWithLifecycle()
     val backupRunning by viewModel.backupRunning.collectAsStateWithLifecycle()
     val purchaseCount by viewModel.purchaseCount.collectAsStateWithLifecycle()
     val purchaseHistory by viewModel.purchaseHistory.collectAsStateWithLifecycle()
@@ -216,12 +217,14 @@ private fun SettingsContent(
         GeminiSection(
             hasKey = hasApiKey,
             storedModel = settings.geminiModel,
+            models = geminiModels,
             classifyItems = settings.classifyWithGemini,
             keyTestRunning = keyTestRunning,
             onSaveKey = viewModel::saveApiKey,
             onTestKey = viewModel::testApiKey,
             onDeleteKey = viewModel::deleteApiKey,
             onSaveModel = viewModel::setGeminiModel,
+            onLoadModels = viewModel::loadGeminiModels,
             onClassifyItemsChange = viewModel::setClassifyWithGemini,
             onMessage = viewModel::showMessage,
             modifier = Modifier.onPlaced { geminiTop = it.positionInParent().y.roundToInt() },

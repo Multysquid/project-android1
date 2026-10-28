@@ -28,7 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +37,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
@@ -46,30 +45,31 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import de.jw.einkaufsliste.core.gemini.GeminiApi
+import de.jw.einkaufsliste.core.gemini.GeminiModels
 
 private const val AI_STUDIO_URL = "https://aistudio.google.com/apikey"
 
-private fun normalizeModel(input: String): String = input.trim().ifEmpty { GeminiApi.DEFAULT_MODEL }
-
 /**
  * "Gemini": the user's own API key (stored encrypted, never shown again once saved), the
- * model name and whether new items are classified with Gemini ([classifyItems]). [storedModel]
- * is the saved model; edits are saved when the field loses focus, on "Fertig" and when the
- * screen goes away. [modifier] goes to the section as a whole (the settings scroll to it when
- * opened from the photo screen).
+ * model and whether new items are classified with Gemini ([classifyItems]). [storedModel] is
+ * the saved model and [models] Google's list for the stored key; the section asks for that
+ * list ([onLoadModels]) whenever a key is stored, and without one offers the known models.
+ * [modifier] goes to the section as a whole (the settings scroll to it when opened from the
+ * photo screen).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun GeminiSection(
     hasKey: Boolean,
     storedModel: String,
+    models: GeminiModelList,
     classifyItems: Boolean,
     keyTestRunning: Boolean,
     onSaveKey: (String) -> Unit,
-    onTestKey: (enteredKey: String?, model: String) -> Unit,
+    onTestKey: (enteredKey: String?) -> Unit,
     onDeleteKey: () -> Unit,
     onSaveModel: (String) -> Unit,
+    onLoadModels: (force: Boolean) -> Unit,
     onClassifyItemsChange: (Boolean) -> Unit,
     onMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -80,23 +80,17 @@ internal fun GeminiSection(
     var keyInput by remember { mutableStateOf("") }
     var keyVisible by remember { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
-    var modelInput by rememberSaveable { mutableStateOf(storedModel) }
-    var modelFocused by remember { mutableStateOf(false) }
 
-    fun commitModel() {
-        val model = normalizeModel(modelInput)
-        modelInput = model
-        if (model != storedModel) onSaveModel(model)
+    val latestOnLoadModels by rememberUpdatedState(onLoadModels)
+    LaunchedEffect(hasKey) {
+        if (hasKey) latestOnLoadModels(false)
     }
-
-    val latestModelInput by rememberUpdatedState(modelInput)
-    val latestStoredModel by rememberUpdatedState(storedModel)
-    val latestOnSaveModel by rememberUpdatedState(onSaveModel)
-    DisposableEffect(Unit) {
-        onDispose {
-            val model = normalizeModel(latestModelInput)
-            if (model != latestStoredModel) latestOnSaveModel(model)
-        }
+    val modelChoices = remember(models.fromGoogle, storedModel) { GeminiModels.choices(models.fromGoogle, storedModel) }
+    val modelNote = when {
+        !hasKey -> "Mit Schlüssel zeigt die App alle Modelle, die er nutzen darf."
+        models.failed -> "Die Liste von Google konnte nicht geladen werden. Gezeigt werden bekannte Modelle."
+        models.fromGoogle != null -> "Die Modelle, die dein Schlüssel nutzen darf."
+        else -> null
     }
 
     Column(modifier) {
@@ -163,9 +157,8 @@ internal fun GeminiSection(
             ) { Text("Speichern") }
             OutlinedButton(
                 onClick = {
-                    // Leaving the model field saves it; the test then runs against what is shown.
                     focusManager.clearFocus()
-                    onTestKey(keyInput.trim().ifEmpty { null }, normalizeModel(modelInput))
+                    onTestKey(keyInput.trim().ifEmpty { null })
                 },
                 enabled = !keyTestRunning && (hasKey || keyInput.isNotBlank()),
             ) {
@@ -182,26 +175,16 @@ internal fun GeminiSection(
             modifier = Modifier.padding(horizontal = 4.dp),
         ) { Text("Schlüssel bei Google AI Studio holen") }
 
-        OutlinedTextField(
-            value = modelInput,
-            onValueChange = { modelInput = it },
-            label = { Text("Modell") },
-            supportingText = { Text("Standard: ${GeminiApi.DEFAULT_MODEL}") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Ascii,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        GeminiModelPicker(
+            choices = modelChoices,
+            selected = storedModel,
+            loading = models.loading,
+            note = modelNote,
+            onSelect = onSaveModel,
+            onReload = if (hasKey) ({ onLoadModels(true) }) else null,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .onFocusChanged { state ->
-                    if (modelFocused && !state.isFocused) commitModel()
-                    modelFocused = state.isFocused
-                },
+                .padding(horizontal = 16.dp, vertical = 4.dp),
         )
         SwitchRow(
             title = "Artikel mit Gemini einordnen",

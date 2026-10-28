@@ -1,5 +1,6 @@
 package de.jw.einkaufsliste.data
 
+import de.jw.einkaufsliste.core.gemini.GeminiApi
 import de.jw.einkaufsliste.data.settings.AppSettings
 import de.jw.einkaufsliste.data.settings.SettingsUpgradeMigration
 import org.junit.Assert.assertEquals
@@ -39,5 +40,22 @@ class SettingsUpgradeMigrationTest {
             assertNull(SettingsUpgradeMigration.upgradedClassifyWithGemini(stored = true, hasStoredKey = hasKey))
             assertNull(SettingsUpgradeMigration.upgradedClassifyWithGemini(stored = false, hasStoredKey = hasKey))
         }
+    }
+
+    @Test
+    fun oldDefaultModelBecomesTheNewDefault() {
+        assertEquals("gemini-2.5-flash", SettingsUpgradeMigration.OLD_DEFAULT_MODEL)
+        assertEquals(GeminiApi.DEFAULT_MODEL, AppSettings().geminiModel)
+        for (stored in listOf("gemini-2.5-flash", " gemini-2.5-flash ", "models/gemini-2.5-flash")) {
+            assertEquals(stored, GeminiApi.DEFAULT_MODEL, SettingsUpgradeMigration.upgradedGeminiModel(stored))
+        }
+    }
+
+    @Test
+    fun otherModelsAndNoModelStayAsTheyAre() {
+        for (stored in listOf("gemini-2.5-pro", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", GeminiApi.DEFAULT_MODEL)) {
+            assertNull(stored, SettingsUpgradeMigration.upgradedGeminiModel(stored))
+        }
+        assertNull(SettingsUpgradeMigration.upgradedGeminiModel(null))
     }
 }

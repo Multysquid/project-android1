@@ -27,7 +27,8 @@ import java.util.Locale
  * classifying an item name into [Assortment]s.
  */
 object GeminiApi {
-    const val DEFAULT_MODEL = "gemini-2.5-flash"
+    /** Google's recommendation for new projects (October 2026); new keys may no longer use the 2.5 models. */
+    const val DEFAULT_MODEL = "gemini-3.8-flash"
     const val API_KEY_HEADER = "x-goog-api-key"
 
     /** Name Gemini is told to use when the photo shows no recognizable product. */
@@ -45,6 +46,9 @@ object GeminiApi {
     const val MESSAGE_BLOCKED = "Gemini hat das Foto abgelehnt."
     const val MESSAGE_NO_ANSWER = "Gemini hat nicht geantwortet."
     const val MESSAGE_GARBLED = "Die Antwort von Gemini war unverständlich."
+    const val MESSAGE_MODEL_UNAVAILABLE =
+        "Dieses Gemini-Modell gibt es nicht oder dein Schlüssel darf es nicht nutzen. " +
+            "Bitte in den Einstellungen ein anderes Modell wählen."
 
     private val BLOCKING_FINISH_REASONS =
         setOf("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY")
@@ -89,17 +93,36 @@ object GeminiApi {
     }
 
     fun endpoint(model: String): String =
-        "https://generativelanguage.googleapis.com/v1beta/models/${model.trim()}:generateContent"
+        "https://generativelanguage.googleapis.com/v1beta/models/${GeminiModels.normalizeId(model)}:generateContent"
+
+    /**
+     * JSON body for the cheapest real `generateContent` call, used by "Prüfen": unlike reading
+     * the model's details it fails when the key may not use the model.
+     */
+    fun buildTestRequest(): String = buildJsonObject {
+        putJsonArray("contents") {
+            addJsonObject {
+                put("role", "user")
+                putJsonArray("parts") { addJsonObject { put("text", "Antworte nur mit OK.") } }
+            }
+        }
+    }.toString()
 
     /**
      * JSON body for `generateContent`: a German prompt, the image as inline data and a
      * response schema that forces `{name, categorySlug, quantity, confidence}` with
-     * `categorySlug` restricted to the slugs of [categories].
+     * `categorySlug` restricted to the slugs of [categories]. The temperature is set only
+     * where [model] accepts one (see [GeminiModels.acceptsTemperature]).
      */
-    fun buildRequest(imageBase64: String, mimeType: String, categories: List<CategoryDef>): String {
+    fun buildRequest(
+        imageBase64: String,
+        mimeType: String,
+        categories: List<CategoryDef>,
+        model: String = DEFAULT_MODEL,
+    ): String {
         val slugs = categories.map { it.slug }.distinct()
         return generateContentBody(
-            temperature = 0.2,
+            temperature = 0.2.takeIf { GeminiModels.acceptsTemperature(model) },
             parts = {
                 addJsonObject { put("text", prompt(categories)) }
                 addJsonObject {
@@ -165,10 +188,11 @@ object GeminiApi {
     /**
      * JSON body for `generateContent` that classifies the shopping-list item [itemName]:
      * the German [assortmentPrompt] and a response schema that forces `{assortments}`, a
-     * list restricted to the slugs of all [Assortment]s.
+     * list restricted to the slugs of all [Assortment]s. The temperature is set only where
+     * [model] accepts one (see [GeminiModels.acceptsTemperature]).
      */
-    fun buildAssortmentRequest(itemName: String): String = generateContentBody(
-        temperature = 0.0,
+    fun buildAssortmentRequest(itemName: String, model: String = DEFAULT_MODEL): String = generateContentBody(
+        temperature = 0.0.takeIf { GeminiModels.acceptsTemperature(model) },
         parts = { addJsonObject { put("text", assortmentPrompt(itemName)) } },
         responseSchema = {
             put("type", "OBJECT")
@@ -240,7 +264,7 @@ object GeminiApi {
         return when {
             keyInvalid -> "Der API-Schlüssel ist ungültig. Bitte in den Einstellungen prüfen."
             httpCode == 401 || httpCode == 403 -> "Der API-Schlüssel hat keinen Zugriff auf Gemini."
-            httpCode == 404 -> "Dieses Gemini-Modell gibt es nicht. Bitte den Modellnamen in den Einstellungen prüfen."
+            httpCode == 404 -> MESSAGE_MODEL_UNAVAILABLE
             httpCode == 429 -> "Zu viele Anfragen oder Kontingent aufgebraucht. Bitte später nochmal versuchen."
             httpCode == 400 && status == "FAILED_PRECONDITION" ->
                 "Gemini ist für diesen Schlüssel oder dieses Land nicht verfügbar."
@@ -249,9 +273,12 @@ object GeminiApi {
         }
     }
 
-    /** A single-turn user request asking for a JSON answer that follows [responseSchema]. */
+    /**
+     * A single-turn user request asking for a JSON answer that follows [responseSchema];
+     * [temperature] null keeps the model's default.
+     */
     private fun generateContentBody(
-        temperature: Double,
+        temperature: Double?,
         parts: JsonArrayBuilder.() -> Unit,
         responseSchema: JsonObjectBuilder.() -> Unit,
     ): String = buildJsonObject {
@@ -262,7 +289,7 @@ object GeminiApi {
             }
         }
         putJsonObject("generationConfig") {
-            put("temperature", temperature)
+            if (temperature != null) put("temperature", temperature)
             put("responseMimeType", "application/json")
             putJsonObject("responseSchema", responseSchema)
         }

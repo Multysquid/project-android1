@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import de.jw.einkaufsliste.core.gemini.GeminiApi
+import de.jw.einkaufsliste.core.gemini.GeminiModels
 import de.jw.einkaufsliste.core.model.GeoPoint
 import de.jw.einkaufsliste.core.model.QuietHours
 import de.jw.einkaufsliste.core.schedule.CheckSchedule
@@ -36,6 +37,7 @@ data class AppSettings(
     val quietEndMinute: Int = 7 * 60,
     val respectOpeningHours: Boolean = true,
     val cooldownHours: Int = 3,
+    /** The Gemini model for photos and item names, as the API names it ("gemini-3.8-flash"). */
     val geminiModel: String = GeminiApi.DEFAULT_MODEL,
     /**
      * Ask Gemini what kind of product each new item is (only with an API key); its answers count
@@ -76,7 +78,7 @@ class SettingsRepository(context: Context) {
             prefs[Keys.quietEndMinute] = next.quietEndMinute.coerceIn(0, 24 * 60 - 1)
             prefs[Keys.respectOpeningHours] = next.respectOpeningHours
             prefs[Keys.cooldownHours] = next.cooldownHours.coerceIn(1, 48)
-            prefs[Keys.geminiModel] = next.geminiModel.trim().ifEmpty { GeminiApi.DEFAULT_MODEL }
+            prefs[Keys.geminiModel] = GeminiModels.normalizeId(next.geminiModel)
             prefs[Keys.classifyWithGemini] = next.classifyWithGemini
             prefs[Keys.batterySetupDone] = next.batterySetupDone
             prefs[Keys.hideCheckBanner] = next.hideCheckBanner
@@ -121,22 +123,34 @@ class SettingsRepository(context: Context) {
 }
 
 /**
- * One-time upgrade of the settings an older version saved, run by DataStore before the first
- * read and marked done in the store. That version saved every setting on each change, so most
- * users have its default radius of 500 m stored: it becomes the new default. Users who already
- * had a Gemini key were told that only photos go to Gemini, so "Artikel mit Gemini einordnen"
- * starts off for them. [hasStoredGeminiKey] says whether a key is stored.
+ * One-time upgrades of the settings older versions saved, run by DataStore before the first
+ * read; each step is marked done in the store. Those versions saved every setting on each
+ * change, so most users have the old defaults stored even if they never chose them.
+ *
+ * Step 2: the default radius of 500 m becomes the new default. Users who already had a Gemini
+ * key were told that only photos go to Gemini, so "Artikel mit Gemini einordnen" starts off
+ * for them. [hasStoredGeminiKey] says whether a key is stored.
+ *
+ * Step 3: the old default model "gemini-2.5-flash", which new keys may no longer use, becomes
+ * the new default.
  */
 internal class SettingsUpgradeMigration(private val hasStoredGeminiKey: () -> Boolean) : DataMigration<Preferences> {
-    override suspend fun shouldMigrate(currentData: Preferences): Boolean = currentData[Keys.upgradeV2Done] != true
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+        currentData[Keys.upgradeV2Done] != true || currentData[Keys.upgradeV3Done] != true
 
     override suspend fun migrate(currentData: Preferences): Preferences {
         val prefs = currentData.toMutablePreferences()
-        upgradedRadius(prefs[Keys.radiusMeters])?.let { prefs[Keys.radiusMeters] = it }
-        upgradedClassifyWithGemini(prefs[Keys.classifyWithGemini], hasStoredGeminiKey())?.let {
-            prefs[Keys.classifyWithGemini] = it
+        if (prefs[Keys.upgradeV2Done] != true) {
+            upgradedRadius(prefs[Keys.radiusMeters])?.let { prefs[Keys.radiusMeters] = it }
+            upgradedClassifyWithGemini(prefs[Keys.classifyWithGemini], hasStoredGeminiKey())?.let {
+                prefs[Keys.classifyWithGemini] = it
+            }
+            prefs[Keys.upgradeV2Done] = true
         }
-        prefs[Keys.upgradeV2Done] = true
+        if (prefs[Keys.upgradeV3Done] != true) {
+            upgradedGeminiModel(prefs[Keys.geminiModel])?.let { prefs[Keys.geminiModel] = it }
+            prefs[Keys.upgradeV3Done] = true
+        }
         return prefs
     }
 
@@ -153,6 +167,13 @@ internal class SettingsUpgradeMigration(private val hasStoredGeminiKey: () -> Bo
         /** The value to store for "Artikel mit Gemini einordnen" instead of the [stored] one, or null to keep it. */
         fun upgradedClassifyWithGemini(stored: Boolean?, hasStoredKey: Boolean): Boolean? =
             if (stored == null && hasStoredKey) false else null
+
+        /** The default model before the upgrade. */
+        const val OLD_DEFAULT_MODEL = "gemini-2.5-flash"
+
+        /** The model to store instead of the [stored] one, or null to keep it. */
+        fun upgradedGeminiModel(stored: String?): String? =
+            if (stored != null && GeminiModels.normalizeId(stored) == OLD_DEFAULT_MODEL) GeminiApi.DEFAULT_MODEL else null
     }
 }
 
@@ -174,6 +195,9 @@ private object Keys {
     val fetchRadius = intPreferencesKey("shop_fetch_radius")
     val fetchAt = longPreferencesKey("shop_fetch_at")
 
-    /** [SettingsUpgradeMigration] ran. */
+    /** [SettingsUpgradeMigration] ran step 2 (radius, "Artikel mit Gemini einordnen"). */
     val upgradeV2Done = booleanPreferencesKey("upgrade_v2_done")
+
+    /** [SettingsUpgradeMigration] ran step 3 (Gemini model). */
+    val upgradeV3Done = booleanPreferencesKey("upgrade_v3_done")
 }
