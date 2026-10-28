@@ -117,7 +117,7 @@ internal fun GeminiModelPicker(
                 if (loading) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Text(
-                        text = "Lade die Modelle deines Schlüssels …",
+                        text = "Lade die Modellliste von Google …",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier

@@ -54,8 +54,9 @@ private const val AI_STUDIO_URL = "https://aistudio.google.com/apikey"
  * model and whether new items are classified with Gemini ([classifyItems]). [storedModel] is
  * the saved model and [models] Google's list for the stored key; the section asks for that
  * list ([onLoadModels]) whenever a key is stored, and without one offers the known models.
- * [modifier] goes to the section as a whole (the settings scroll to it when opened from the
- * photo screen).
+ * Google also lists models a key may not use, so picking a model with a key stored runs
+ * "Prüfen" right away. [modifier] goes to the section as a whole (the settings scroll to it
+ * when opened from the photo screen).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -86,10 +87,16 @@ internal fun GeminiSection(
         if (hasKey) latestOnLoadModels(false)
     }
     val modelChoices = remember(models.fromGoogle, storedModel) { GeminiModels.choices(models.fromGoogle, storedModel) }
+    // Same test as GeminiModels.choices: an empty list from Google shows the known models.
+    val googleListShown = !models.fromGoogle.isNullOrEmpty()
     val modelNote = when {
-        !hasKey -> "Mit Schlüssel zeigt die App alle Modelle, die er nutzen darf."
+        !hasKey -> "Mit Schlüssel zeigt die App die Modelle, die Google dafür auflistet."
+        models.failed && googleListShown -> "Die Liste konnte nicht neu geladen werden. Gezeigt wird die zuletzt geladene."
         models.failed -> "Die Liste von Google konnte nicht geladen werden. Gezeigt werden bekannte Modelle."
-        models.fromGoogle != null -> "Die Modelle, die dein Schlüssel nutzen darf."
+        models.fromGoogle?.isEmpty() == true -> "Google hat keine passenden Modelle gemeldet. Gezeigt werden bekannte Modelle."
+        googleListShown ->
+            "Die Modelle, die Google für deinen Schlüssel auflistet. Nach der Wahl prüft die App, " +
+                "ob dein Schlüssel das Modell nutzen darf."
         else -> null
     }
 
@@ -180,7 +187,10 @@ internal fun GeminiSection(
             selected = storedModel,
             loading = models.loading,
             note = modelNote,
-            onSelect = onSaveModel,
+            onSelect = { model ->
+                onSaveModel(model)
+                if (hasKey) onTestKey(null)
+            },
             onReload = if (hasKey) ({ onLoadModels(true) }) else null,
             modifier = Modifier
                 .fillMaxWidth()

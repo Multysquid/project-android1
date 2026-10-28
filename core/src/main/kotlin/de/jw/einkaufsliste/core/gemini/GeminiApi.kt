@@ -49,6 +49,8 @@ object GeminiApi {
     const val MESSAGE_MODEL_UNAVAILABLE =
         "Dieses Gemini-Modell gibt es nicht oder dein Schlüssel darf es nicht nutzen. " +
             "Bitte in den Einstellungen ein anderes Modell wählen."
+    const val MESSAGE_MODEL_UNSUITABLE =
+        "Dieses Modell kann die Anfragen der App nicht beantworten. Bitte in den Einstellungen ein anderes Modell wählen."
 
     private val BLOCKING_FINISH_REASONS =
         setOf("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY")
@@ -94,19 +96,6 @@ object GeminiApi {
 
     fun endpoint(model: String): String =
         "https://generativelanguage.googleapis.com/v1beta/models/${GeminiModels.normalizeId(model)}:generateContent"
-
-    /**
-     * JSON body for the cheapest real `generateContent` call, used by "Prüfen": unlike reading
-     * the model's details it fails when the key may not use the model.
-     */
-    fun buildTestRequest(): String = buildJsonObject {
-        putJsonArray("contents") {
-            addJsonObject {
-                put("role", "user")
-                putJsonArray("parts") { addJsonObject { put("text", "Antworte nur mit OK.") } }
-            }
-        }
-    }.toString()
 
     /**
      * JSON body for `generateContent`: a German prompt, the image as inline data and a
@@ -265,12 +254,24 @@ object GeminiApi {
             keyInvalid -> "Der API-Schlüssel ist ungültig. Bitte in den Einstellungen prüfen."
             httpCode == 401 || httpCode == 403 -> "Der API-Schlüssel hat keinen Zugriff auf Gemini."
             httpCode == 404 -> MESSAGE_MODEL_UNAVAILABLE
+            isUnsuitableModel(httpCode, body) -> MESSAGE_MODEL_UNSUITABLE
             httpCode == 429 -> "Zu viele Anfragen oder Kontingent aufgebraucht. Bitte später nochmal versuchen."
             httpCode == 400 && status == "FAILED_PRECONDITION" ->
                 "Gemini ist für diesen Schlüssel oder dieses Land nicht verfügbar."
             httpCode in 500..599 -> "Gemini ist gerade nicht erreichbar. Bitte später nochmal versuchen."
             else -> "Fehler bei Gemini (HTTP $httpCode)."
         }
+    }
+
+    /**
+     * Whether an error answer says the model cannot take the app's requests, such as JSON
+     * answers or images ("JSON mode is not enabled for models/gemma-3-27b-it"): the fix is
+     * another model.
+     */
+    fun isUnsuitableModel(httpCode: Int, body: String): Boolean {
+        if (httpCode != 400) return false
+        val message = (parseObject(body)?.get("error") as? JsonObject)?.string("message") ?: return false
+        return message.contains("is not enabled for models/", ignoreCase = true)
     }
 
     /**

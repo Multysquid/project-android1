@@ -32,7 +32,7 @@ object GeminiModels {
     const val HINT_LEGACY = "Älteres Modell, das neue Schlüssel nicht mehr nutzen dürfen"
     const val HINT_PREVIEW = "Vorschau, kann jederzeit wegfallen"
     const val HINT_ALIAS = "Zeigt immer auf das aktuelle Modell dieser Art"
-    const val HINT_CUSTOM = "Selbst eingetragen"
+    const val HINT_NOT_LISTED = "Steht nicht in Googles Liste für deinen Schlüssel"
 
     /**
      * Offered when Google's list cannot be loaded (no key yet, offline). Checked against
@@ -109,13 +109,15 @@ object GeminiModels {
 
     /**
      * The entries of the model picker: [fromGoogle] when it has any, else [KNOWN], each id
-     * once, with German hints; [selected] is added when it is missing. The default model
-     * comes first, then the newest versions, stable before preview; aliases such as
-     * "gemini-flash-latest" and custom names come last.
+     * once, with German hints; [selected] is added when it is missing (marked as not listed
+     * only when Google's list is shown, since without it the app cannot tell). The default
+     * model comes first, then the newest versions, stable before preview; aliases such as
+     * "gemini-flash-latest" and other names come last.
      */
     fun choices(fromGoogle: List<GeminiModel>?, selected: String): List<GeminiModel> {
         val known = KNOWN.associateBy { it.id }
-        val base = fromGoogle?.takeIf { it.isNotEmpty() } ?: KNOWN
+        val google = fromGoogle?.takeIf { it.isNotEmpty() }
+        val base = google ?: KNOWN
         val models = base.distinctBy { it.id }.map { model ->
             val hint = model.hint ?: known[model.id]?.hint ?: ruleHint(model.id)
             model.copy(hint = hint)
@@ -124,15 +126,16 @@ object GeminiModels {
         val all = if (models.any { it.id == selectedId }) {
             models
         } else {
-            models + (known[selectedId] ?: GeminiModel(selectedId, selectedId, ruleHint(selectedId) ?: HINT_CUSTOM))
+            val hint = ruleHint(selectedId) ?: HINT_NOT_LISTED.takeIf { google != null }
+            models + (known[selectedId] ?: GeminiModel(selectedId, selectedId, hint))
         }
         return all.sortedWith(PICKER_ORDER)
     }
 
-    /** The picker entry for [selected] among [choices], or a custom entry. */
+    /** The picker entry for [selected] among [choices], or a plain entry with its id. */
     fun find(choices: List<GeminiModel>, selected: String): GeminiModel {
         val id = normalizeId(selected)
-        return choices.firstOrNull { it.id == id } ?: GeminiModel(id, id, HINT_CUSTOM)
+        return choices.firstOrNull { it.id == id } ?: GeminiModel(id, id)
     }
 
     private fun ruleHint(id: String): String? {

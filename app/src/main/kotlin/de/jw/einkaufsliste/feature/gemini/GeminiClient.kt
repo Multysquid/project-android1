@@ -74,26 +74,29 @@ class GeminiClient(
     }
 
     /**
-     * Checks [apiKey] (or the stored key when null) together with the chosen model by asking it
-     * a tiny question; failure carries a German message. Reading the model's details is not
-     * enough: Google lists models that a new key may no longer use.
+     * Checks [apiKey] (or the stored key when null) together with the chosen model by classifying
+     * a sample item the way the app does; failure carries a German message. Reading the model's
+     * details is not enough: Google lists models that a new key may no longer use, and some
+     * models cannot give the JSON answers the app asks for.
      */
     suspend fun testKey(apiKey: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
         guarded {
             val key = keyOrStored(apiKey)
             val model = modelName(settings.current().geminiModel)
             val request = requestBuilder(GeminiApi.endpoint(model), key)
-                .post(GeminiApi.buildTestRequest().toRequestBody(JSON))
+                .post(GeminiApi.buildAssortmentRequest(TEST_ITEM, model).toRequestBody(JSON))
                 .build()
             val response = http.fetch(request)
             if (!response.isSuccessful) throw httpError(response.code, response.body)
+            GeminiApi.parseAssortments(response.body)
             Unit
         }
     }
 
     /**
-     * The models [apiKey] (or the stored key when null) can ask for text, as Google lists them
-     * (see [GeminiModels.parsePage]); failure carries a German message.
+     * The text models Google lists for [apiKey] (or the stored key when null), see
+     * [GeminiModels.parsePage]. Google also lists models a new key may not use, so only
+     * [testKey] tells whether one works. Failure carries a German message.
      */
     suspend fun listModels(apiKey: String? = null): Result<List<GeminiModel>> = withContext(Dispatchers.IO) {
         guarded {
@@ -137,12 +140,14 @@ class GeminiClient(
 
     /**
      * Exception for an HTTP error answer. A rejected key (401/403, or the "key not valid" answer
-     * [GeminiApi.errorMessage] looks for) or an unknown model (404) is fixed in the settings.
+     * [GeminiApi.errorMessage] looks for), an unknown model (404) or a model that cannot take
+     * the app's requests ([GeminiApi.isUnsuitableModel]) is fixed in the settings.
      */
     private fun httpError(code: Int, body: String): Exception {
         val message = GeminiApi.errorMessage(code, body)
         val keyOrModel = code == 401 || code == 403 || code == 404 || body.contains("API_KEY_INVALID") ||
-            (code == 400 && body.contains("API key not valid", ignoreCase = true))
+            (code == 400 && body.contains("API key not valid", ignoreCase = true)) ||
+            GeminiApi.isUnsuitableModel(code, body)
         return if (keyOrModel) GeminiSettingsException(message) else GeminiException(message)
     }
 
@@ -169,6 +174,9 @@ class GeminiClient(
 
         /** Pages of the model list read at most; one page holds up to 1000 models. */
         private const val MAX_MODEL_PAGES = 5
+
+        /** The item "Prüfen" has the model classify. */
+        private const val TEST_ITEM = "Milch"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
 }

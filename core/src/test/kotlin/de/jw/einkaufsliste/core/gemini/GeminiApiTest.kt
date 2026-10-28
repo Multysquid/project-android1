@@ -101,13 +101,20 @@ class GeminiApiTest {
     }
 
     @Test
-    fun testRequestIsATinyTextQuestion() {
-        val body = Json.parseToJsonElement(GeminiApi.buildTestRequest()).jsonObject
-        assertEquals(setOf("contents"), body.keys)
-        val content = body.getValue("contents").jsonArray.single().jsonObject
-        assertEquals("user", content.getValue("role").jsonPrimitive.content)
-        val part = content.getValue("parts").jsonArray.single().jsonObject
-        assertEquals(setOf("text"), part.keys)
+    fun modelsThatCannotTakeTheAppsRequestsAreASettingsProblem() {
+        val jsonMode = """
+            {"error": {"code": 400, "message": "JSON mode is not enabled for models/gemma-3-27b-it", "status": "INVALID_ARGUMENT"}}
+        """.trimIndent()
+        assertTrue(GeminiApi.isUnsuitableModel(400, jsonMode))
+        assertEquals(GeminiApi.MESSAGE_MODEL_UNSUITABLE, GeminiApi.errorMessage(400, jsonMode))
+
+        val other = """
+            {"error": {"code": 400, "message": "Request contains an invalid argument.", "status": "INVALID_ARGUMENT"}}
+        """.trimIndent()
+        assertFalse(GeminiApi.isUnsuitableModel(400, other))
+        assertFalse(GeminiApi.isUnsuitableModel(404, jsonMode))
+        assertFalse(GeminiApi.isUnsuitableModel(400, "not json"))
+        assertEquals("Fehler bei Gemini (HTTP 400).", GeminiApi.errorMessage(400, other))
     }
 
     @Test

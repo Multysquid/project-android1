@@ -79,7 +79,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _geminiModels = MutableStateFlow(GeminiModelList())
 
-    /** The models the stored key can use, for the model picker. */
+    /** The text models Google lists for the stored key, for the model picker. */
     internal val geminiModels: StateFlow<GeminiModelList> = _geminiModels.asStateFlow()
 
     private var modelListJob: Job? = null
@@ -143,8 +143,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Loads the models the stored key can use, once per screen unless [force]; without a key
-     * the picker keeps showing the known models.
+     * Loads the text models Google lists for the stored key, once per screen unless [force];
+     * without a key the picker keeps showing the known models.
      */
     fun loadGeminiModels(force: Boolean = false) {
         val current = _geminiModels.value

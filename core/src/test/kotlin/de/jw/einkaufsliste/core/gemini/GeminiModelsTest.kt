@@ -192,7 +192,7 @@ class GeminiModelsTest {
 
         val custom = GeminiModels.choices(fromGoogle, "models/my-tuned-model")
         assertEquals(listOf("gemini-3.8-flash", "my-tuned-model"), custom.map { it.id })
-        assertEquals(GeminiModel("my-tuned-model", "my-tuned-model", GeminiModels.HINT_CUSTOM), custom.last())
+        assertEquals(GeminiModel("my-tuned-model", "my-tuned-model", GeminiModels.HINT_NOT_LISTED), custom.last())
 
         val known = GeminiModels.choices(fromGoogle, "gemini-4-argon")
         assertEquals(GeminiModels.KNOWN.single { it.id == "gemini-4-argon" }, known.single { it.id == "gemini-4-argon" })
@@ -202,9 +202,18 @@ class GeminiModelsTest {
     }
 
     @Test
-    fun findReturnsTheSelectedEntryOrACustomOne() {
+    fun withoutGooglesListAnUnknownSelectedModelIsNotCalledUnlisted() {
+        // It may well be in Google's list, which is not loaded yet (or offline).
+        for (fromGoogle in listOf(null, emptyList<GeminiModel>())) {
+            val choices = GeminiModels.choices(fromGoogle, "gemini-3.6-flash")
+            assertEquals(GeminiModel("gemini-3.6-flash", "gemini-3.6-flash"), choices.single { it.id == "gemini-3.6-flash" })
+        }
+    }
+
+    @Test
+    fun findReturnsTheSelectedEntryOrAPlainOne() {
         val choices = GeminiModels.choices(null, GeminiApi.DEFAULT_MODEL)
         assertEquals(GeminiModels.KNOWN.first(), GeminiModels.find(choices, " models/${GeminiApi.DEFAULT_MODEL}"))
-        assertEquals(GeminiModel("other", "other", GeminiModels.HINT_CUSTOM), GeminiModels.find(choices, "other"))
+        assertEquals(GeminiModel("other", "other"), GeminiModels.find(choices, "other"))
     }
 }

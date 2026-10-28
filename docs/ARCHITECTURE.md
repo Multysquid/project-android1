@@ -170,11 +170,12 @@ Gemini model: one setting for photos and item names, default `GeminiApi.DEFAULT_
 in the settings offers Google's model list for the stored key (`GeminiClient.listModels`,
 filtered by `GeminiModels.isPickable` to models that answer `generateContent` with text),
 or `GeminiModels.KNOWN` without a key or when the list cannot be loaded, plus a free-text
-entry for unlisted names. "Prüfen" sends a tiny real `generateContent` request
-(`GeminiApi.buildTestRequest`), because reading a model's details succeeds for models the
-key may not use. Requests set a temperature only for Gemini 1.x/2.x models
-(`GeminiModels.acceptsTemperature`); Google asks to keep the sampling defaults from
-Gemini 3 on.
+entry for unlisted names. "Prüfen" (run after every pick while a key is stored) classifies
+a sample item with the real request (`GeminiApi.buildAssortmentRequest`), because reading
+a model's details succeeds for models the key may not use, and some models reject JSON
+answers (`GeminiApi.isUnsuitableModel`). Requests set a temperature only for Gemini 1.x and
+2.x models (`GeminiModels.acceptsTemperature`); Google asks to keep the sampling defaults
+from Gemini 3 on.
 
 - Interval >= 15 min: WorkManager unique periodic work.
 - Interval < 15 min: foreground service of type `location` with a permanent

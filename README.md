@@ -57,8 +57,9 @@ ohne Android SDK testen:
    „Genau“ und danach „Immer zulassen“ wählen und *Samsung-Akku einrichten* durchgehen.
 4. Optional, für Fotos und genaueres Einordnen: unter *Einstellungen → Gemini* einen eigenen
    Gemini-API-Schlüssel eintragen (erhältlich in Google AI Studio). Darunter lässt sich das
-   Modell wählen; mit Schlüssel zeigt die Liste alle Modelle, die er nutzen darf. Standard ist
-   Gemini 3.8 Flash. „Prüfen“ testet Schlüssel und Modell zusammen.
+   Modell wählen; mit Schlüssel zeigt die Liste die Modelle, die Google dafür auflistet.
+   Standard ist Gemini 3.8 Flash. „Prüfen“ (läuft nach jeder Modellwahl von selbst) testet
+   Schlüssel und Modell zusammen.
 
 Die APK ist mit einem Debug-Schlüssel signiert, den jeder Build neu erzeugt. Lässt sich eine
 neue Version deshalb nicht über die alte installieren, vorher in der App „Liste sichern“
